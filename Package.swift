@@ -24,6 +24,16 @@ var targets: [Target] = [
         dependencies: ["MusicCore"],
         swiftSettings: swiftSettings
     ),
+    .target(
+        name: "Persistence",
+        dependencies: ["MusicCore"],
+        swiftSettings: swiftSettings
+    ),
+    .testTarget(
+        name: "PersistenceTests",
+        dependencies: ["Persistence", "MusicCore"],
+        swiftSettings: swiftSettings
+    ),
 ]
 
 var products: [Product] = []
@@ -49,12 +59,22 @@ if !coreOnly {
         ),
         .testTarget(
             name: "AnalysisEngineTests",
-            dependencies: ["AnalysisEngine"],
+            dependencies: ["AnalysisEngine", "MusicCore"],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "PlaybackEngine",
+            dependencies: ["MusicCore"],
+            swiftSettings: swiftSettings
+        ),
+        .testTarget(
+            name: "PlaybackEngineTests",
+            dependencies: ["PlaybackEngine", "MusicCore"],
             swiftSettings: swiftSettings
         ),
         .target(
             name: "RiffnexApp",
-            dependencies: ["MusicCore", "DesignSystem", "AnalysisEngine"],
+            dependencies: ["MusicCore", "DesignSystem", "AnalysisEngine", "Persistence", "PlaybackEngine"],
             resources: [
                 .process("Resources"),
             ],
