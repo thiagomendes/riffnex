@@ -49,15 +49,22 @@ O código é compilado e testado automaticamente no GitHub Actions a cada push. 
    - Quando ele pedir o Xcode, informe o caminho do `.xip`. O SDK ocupa cerca de 7 GB.
    - **Seu Apple ID e sua senha ficam só no seu PC.** Nunca envie essas informações para o Claude.
 
-7. **iPhone conectado ao WSL por USB.** O WSL não enxerga USB sozinho. No PowerShell (administrador):
-   ```powershell
-   winget install usbipd
-   usbipd list                       # anote o BUSID do "Apple Mobile Device" / iPhone
-   usbipd bind --busid <BUSID>
-   usbipd attach --wsl --busid <BUSID>
-   ```
-   Desbloqueie o iPhone e toque em **Confiar** quando ele perguntar. No Ubuntu, `xtool devices` deve listar o seu iPhone. Se aparecer `AFCClient.Error.muxError`, consulte a seção de solução de problemas da documentação do xtool.
-
+7. **Conexão do WSL com o iPhone, pelo Windows.** Com usbipd, o `xtool dev` trava em “[Connecting] 100%” sem responder ao Ctrl+C ([xtool#19](https://github.com/xtool-org/xtool/issues/19)). O caminho que funciona é deixar o iPhone no **Windows** e o WSL usar o serviço da Apple do Windows:
+   1. Instale **Apple Devices** (ou iTunes) pela Microsoft Store. Conecte e desbloqueie o iPhone e toque em **Confiar**.
+   2. No PowerShell **como administrador**, uma vez só:
+      ```powershell
+      New-NetFirewallRule -DisplayName "WSL" -Direction Inbound -InterfaceAlias "vEthernet (WSL (Hyper-V firewall))" -Action Allow
+      $myhost = $(wsl -- ip route list default | awk '{print $3}')
+      netsh interface portproxy set v4tov4 listenport=27015 connectaddress=127.0.0.1 connectport=27015 listenaddress=$myhost
+      ```
+      Se você já tinha usado usbipd, devolva o iPhone ao Windows antes: `usbipd detach --busid <BUSID>` e `usbipd unbind --busid <BUSID>`.
+   3. No Ubuntu (a variável vale para cada terminal novo; dá para colocar no `~/.bashrc`):
+      ```bash
+      sudo apt-get install -y libimobiledevice-utils
+      export USBMUXD_SOCKET_ADDRESS="$(ip route list default | awk '{print $3}'):27015"
+      ideviceinfo | head -5     # deve mostrar dados do iPhone
+      ```
+      Se o WSL estiver em modo de rede *mirrored*, use `export USBMUXD_SOCKET_ADDRESS="127.0.0.1:27015"`.
 
 ## Compilar e instalar
 
