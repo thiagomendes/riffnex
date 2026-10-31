@@ -36,10 +36,11 @@ The MVP is one end-to-end vertical slice. It is complete when a user can do all 
 
 ## 3. Milestones
 
-Each milestone ends with a build on Xcode 27, a green test suite, and a short demo recording or notes. Accuracy claims come only from the evaluation harness.
+Each milestone ends with a green CI build and test run (macOS runner, Xcode 27), an install on the owner's iPhone via xtool, and a short demo recording or notes. Accuracy claims come only from the evaluation harness.
 
 ### M0 · Foundation
-- Repository layout, XcodeGen `project.yml`, the `RiffnexKit` package and its targets, swift-format config, `.gitignore`.
+- **Toolchain spike (first):** a minimal app that exercises every risky capability under xtool. It covers SwiftUI with `@Observable`, `.xcstrings` vs `.strings`, the app icon, AVAudioEngine playback, `.fileImporter`, runtime Core ML compilation of `nmp.mlpackage`, `import MusicUnderstanding`, and the OSLogStore log viewer. The results are recorded in `docs/toolchain.md`, and the architecture is adjusted before going further.
+- Repository layout, `Package.swift` + `xtool.yml`, the `RiffnexKit` targets, swift-format config, `.gitignore`.
 - GitHub Actions: build plus unit tests on a macOS runner with Xcode 27 (and the `MusicCore` tests on Linux if feasible).
 - DesignSystem tokens (colors, type, spacing, motion, haptics) and a component gallery preview.
 - `MusicCore` domain types, pitch, interval and tuning math, with tests.
@@ -48,7 +49,7 @@ Each milestone ends with a build on Xcode 27, a green test suite, and a short de
 ### M1 · Library, import & playback
 - Onboarding (the full animated sequence plus a Reduce Motion variant).
 - Import flow with validation, DRM detection, deduplication by content hash and cancellation.
-- SwiftData library (`VersionedSchema`) and Home screen states (empty, list, continue practicing).
+- JSON library store (versioned, atomic) and Home screen states (empty, list, continue practicing).
 - `PlaybackEngine`: play, pause, precise seek, rate, gapless loop, clock with latency compensation, interruptions and route changes, Now Playing.
 - Waveform overview and timeline scrubbing.
 - **Exit:** import a real MP3, loop 8 seconds at 70% with no gap or drift. Clock math and import validation have tests. The UI test runs onboarding → import → playback.
@@ -68,7 +69,7 @@ Each milestone ends with a build on Xcode 27, a green test suite, and a short de
 - Tab strip with measure layout from the bar grid, the chord lane, and the mini timeline with sections, loop handles and bookmarks.
 - Note popover with provenance, confidence and alternatives; re-optimization with pins.
 - Metronome and count-in. Studio state persistence.
-- **Exit:** the full MVP journey works on device with the demo song and with user files. 120 Hz is held on a ProMotion device and 60 Hz on the oldest supported device, measured with Instruments.
+- **Exit:** the full MVP journey works on device with the demo song and with user files. A steady 60 fps on the iPhone 14 Plus, measured by the in-app frame-time monitor.
 
 ### M4 · MVP hardening → personal device build
 - Accessibility pass (VoiceOver rotor, Dynamic Type at AX sizes, Increase Contrast, Differentiate Without Color).
@@ -87,8 +88,8 @@ Each milestone ends with a build on Xcode 27, a green test suite, and a short de
 ## 4. Open decisions (blocking M0)
 
 - **D1:** iOS 27 minimum (recommended) or iOS 18 plus a custom DSP fallback.
-- **D2:** A Mac with Xcode 27 and/or GitHub Actions macOS CI. This container is Linux and cannot build iOS.
-- **D3:** An original demo riff to bundle.
+- **D2:** ~~Mac~~ → Resolved: xtool on the owner's PC plus GitHub Actions macOS CI.
+- **D3:** Resolved: synthesized original demo.
 - **D4:** ~~Bundle ID, team and display name~~ → Resolved: personal use only; bundle ID `com.thiagomendes.riffnex` signed with the owner's Personal Team (or paid account if available).
 
 ## 5. Distribution: personal device only

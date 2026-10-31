@@ -74,7 +74,7 @@ Hierarchy: one display element per screen, at most. Chrome text sizes scale with
 | **Celebration** | Spring `response 0.45, dampingFraction 0.62` (slight bounce) | Rare: analysis complete, section mastered (post-MVP) |
 | **Reduce Motion** | Cross-fades replace spatial transitions. The fretboard jumps instead of panning. The tab view pages per measure instead of scrolling continuously. No particle effects. | |
 
-Target 120 Hz on ProMotion devices for the Studio. Any frame work must be O(visible events).
+The target device (iPhone 14 Plus) has a 60 Hz display, so the Studio target is a steady 60 fps with no hitches. The code also supports 120 Hz on ProMotion. Any frame work must be O(visible events).
 
 ### 2.6 Haptics (Core Haptics / `sensoryFeedback`)
 
@@ -224,7 +224,7 @@ Shown only after a Practice-mode session. It reports **actual measurements**: ti
 
 ### 5.4 Rendering technology
 
-**SwiftUI `Canvas` inside `TimelineView(.animation)`.** At any moment the scene has at most ~6 strings, ~25 frets and dozens of markers. That is well within Canvas's immediate-mode budget, and Canvas keeps text, accessibility and Dynamic Type simple. Static layers (wood, frets, inlays) are drawn into a cached layer and redrawn only on size or orientation change. **Escalation path:** if Instruments shows dropped frames at 120 Hz on the oldest supported device (most likely in Flow mode), move the moving layers to Metal (`MTKView`). The domain and layout code stays unchanged.
+**SwiftUI `Canvas` inside `TimelineView(.animation)`.** At any moment the scene has at most ~6 strings, ~25 frets and dozens of markers. That is well within Canvas's immediate-mode budget, and Canvas keeps text, accessibility and Dynamic Type simple. Static layers (wood, frets, inlays) are drawn into a cached layer and redrawn only on size or orientation change. **Escalation path:** if the in-app frame-time monitor shows hitches at 60 Hz on the iPhone 14 Plus (most likely in Flow mode), move the moving layers to Metal (`MTKView`). The domain and layout code stays unchanged.
 
 ## 6. Accessibility & adaptive layout
 

@@ -84,7 +84,7 @@ Journey refinements from discovery:
 | R5 | Analysis time and battery on older iPhones. | Medium | Basic Pitch is tiny (~270 KB model). Process in windows off the main thread, use `BGContinuedProcessingTask` **[to verify, iOS 26+]** for user-initiated background continuation, and cache stage outputs by content hash. Measure on the oldest supported device. |
 | R6 | Real-time practice feedback: latency, room noise, playback bleed into the mic, distortion. | High (post-MVP) | Headphones-first practice mode, round-trip latency calibration, monophonic feedback only at first, and explicit *“não consegui ouvir com clareza”* (“I couldn't hear clearly”) states. |
 | R7 | Copyright (and App Store guideline 5.2 if store distribution is ever pursued; currently personal use only). | Low–Medium | Local, user-supplied files only. Rights reminder at import. No sharing or export of transcriptions in the MVP. No streaming-service extraction. |
-| R8 | **Development environment:** this cloud container is Linux with no Xcode and cannot build or run iOS. | **High (process)** | Pure-Swift core modules (domain, theory, fingering) are designed to be platform-independent. iOS builds, UI tests and on-device measurement need **a Mac with the Xcode 27 SDK or macOS CI** (GitHub Actions). Nothing will be declared “working” until it has built and passed tests there. |
+| R8 | **Development environment:** this cloud container is Linux with no Xcode and cannot build or run iOS. | **High (process)** | Pure-Swift core modules (domain, theory, fingering) are designed to be platform-independent. The owner has **no Mac**. Builds go through **GitHub Actions macOS CI** for automated compile and test, and **xtool** on the owner's PC signs and installs over USB (see `03-architecture.md` §1.1). Nothing will be declared “working” until it has built and passed tests in CI and been checked on the iPhone. |
 
 ## 7. What runs on-device (MVP: everything)
 
@@ -108,6 +108,6 @@ The scope, exclusions and milestones are in [`04-roadmap.md`](04-roadmap.md).
 ## 9. Decisions requested
 
 - **D1: Minimum iOS version. Recommendation: iOS 27.** Music Understanding gives us production-grade rhythm, key and structure analysis on-device. Supporting iOS 18–26 would mean building and maintaining our own beat tracker, key estimator and segmenter. That roughly doubles the analysis surface for a product that would launch in 2027 anyway. Alternative: iOS 18 minimum plus a custom DSP fallback, which costs about one extra milestone.
-- **D2: Build environment.** Do you have a Mac with Xcode 27? Should we set up GitHub Actions macOS CI so every increment is built and tested?
-- **D3: Demo content.** Approve an **original** demo riff that we produce for bundling (synthesized or recorded by you), run through the real pipeline.
+- **D2: Build environment.** Resolved: no Mac. Use xtool on the owner's PC plus GitHub Actions macOS CI.
+- **D3: Demo content.** Resolved: synthesized original demo approved. Originally: Approve an **original** demo riff that we produce for bundling (synthesized or recorded by you), run through the real pipeline.
 - **D4: Identity.** Resolved: personal use on the owner's iPhone only, no store distribution (see `04-roadmap.md` §5). D1 now depends on the iPhone's installed iOS version.

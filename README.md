@@ -15,8 +15,8 @@
 
 ## Planned stack
 
-Swift 6 · SwiftUI · SwiftData · AVAudioEngine · Core ML (Spotify Basic Pitch, Apache-2.0) · Apple Music Understanding (iOS 27) · Accelerate. No backend in the MVP; all analysis runs on-device.
+Swift 6 · SwiftUI · AVAudioEngine · Core ML (Spotify Basic Pitch, Apache-2.0) · Apple Music Understanding (iOS 27) · Accelerate. No backend in the MVP; all analysis runs on-device.
 
 ## Build instructions
 
-These will be added in milestone M0. Building will require macOS with Xcode 27 and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+These will be added in milestone M0. No Mac is required. Builds use [xtool](https://github.com/xtool-org/xtool) on Linux or Windows (WSL) with Swift 6.4 and an iOS SDK extracted from Xcode 27.1, and the app is installed on the iPhone over USB. CI builds and tests on GitHub Actions macOS runners.

@@ -8,10 +8,37 @@
 |---|---|
 | Language | Swift 6, strict concurrency (Swift 6 language mode) |
 | UI | SwiftUI and the Observation framework (`@Observable`). UIKit only where needed (document picker interop is handled by `.fileImporter`) |
-| Minimum OS | **iOS 27** (pending decision D1; see discovery doc) |
-| Devices | iPhone first. iPad runs the same layout scaled |
-| Project | **XcodeGen** `project.yml` plus local Swift packages. The `.xcodeproj` is generated and not committed |
+| Minimum OS | **iOS 27** if the owner's iPhone 14 Plus runs it (pending D1); otherwise the custom-DSP fallback |
+| Devices | The owner's iPhone 14 Plus (A15, 60 Hz display; no ProMotion) |
+| Project | **SwiftPM package + `xtool.yml`** (no `.xcodeproj`; see §1.1) |
 | Backend | **None** for MVP |
+
+### 1.1 Building without a Mac (xtool)
+
+The owner has no Mac. The toolchain is [xtool](https://github.com/xtool-org/xtool) (MIT), a cross-platform replacement for Xcode. It builds SwiftPM packages into iOS apps and signs and installs them on Linux or Windows (through WSL). Facts were checked against its README and Linux installation docs on 2026-10-31; xtool is at v1.24.0 with frequent releases.
+
+| Need | How |
+|---|---|
+| iOS SDK | xtool extracts it from **Xcode 27.1 `.xip`**. The owner downloads it with their own Apple ID. The SDK is about 7 GB, or smaller with `--slim`. |
+| Toolchain | Swift 6.4 for Linux |
+| Signing | Apple ID. A free account works through Apple's private APIs, and **free provisioning profiles expire after 7 days**, so the app must be reinstalled weekly. A paid account uses an App Store Connect API key. |
+| Install | USB via `usbmuxd`. On WSL this needs USB passthrough (`usbipd`). |
+| **Cannot run in this cloud container** | There is no USB link to the iPhone, and swift.org is blocked here. Apple ID credentials must never be handled by Claude. |
+
+**Build pipeline:**
+1. **CI (GitHub Actions, macOS runner, Xcode 27):** compiles the app and runs the package unit tests on the iOS simulator. This gives every increment an automated, verifiable build that I can trigger and read.
+2. **Owner's PC (xtool):** runs `xtool dev` to build, sign and install over USB. Alternatively, it can sign and install the `.ipa` produced by CI **[to verify: `xtool install` re-signs an unsigned IPA]**.
+
+**Design constraints from SwiftPM + xtool** (each one is validated in the M0 toolchain spike):
+
+| Area | Risk | Decision |
+|---|---|---|
+| SwiftData `@Model` macros | xtool issue #149 (“Is it possible to use SwiftData?”) is still open | **Do not use SwiftData.** Use a Codable JSON store (§7). It is simpler, fully testable, and portable. |
+| `@Observable` | Issue #197 reports failures (Swift 6.2.3). v1.20.0 claims SwiftUI macro support. | Verify in the spike. Fall back to `ObservableObject`. |
+| Asset catalogs (`actool`) | Issue #310 is open on WSL2 | Colors and gradients are defined in code (DesignSystem). The app icon goes through xtool's mechanism **[to verify]**. |
+| Core ML `.mlpackage` | Build-time compilation needs Xcode's `coremlc` | Bundle `nmp.mlpackage` as a raw resource and compile it **on device at first launch** with `MLModel.compileModel(at:)`, then cache the compiled `.mlmodelc`. This is a documented Core ML API. |
+| String Catalogs (`.xcstrings`) | Unknown under xtool | Verify in the spike. Fall back to `pt-BR.lproj/Localizable.strings`, which SwiftPM supports natively. |
+| Previews, LLDB, XCUITest | Not available or not documented | No `#Preview`. Logs use `os.Logger` plus an **in-app log viewer** (OSLogStore, current process). UI tests are deferred. |
 
 ## 2. Module structure
 
@@ -23,7 +50,7 @@ RiffnexApp (app target: features & composition root)
  │
  └─ RiffnexKit (local SwiftPM package)
      ├─ DesignSystem      SwiftUI tokens, typography, components, FretboardView (Canvas)
-     ├─ Persistence       SwiftData models + AnalysisStore (versioned JSON files)
+     ├─ Persistence       LibraryStore + AnalysisStore (versioned Codable JSON files)
      ├─ PlaybackEngine    AVAudioEngine playback, time-stretch, looping, metronome, clock
      ├─ AnalysisEngine    pipeline stages: decode, MusicUnderstanding, BasicPitch, chords
      └─ MusicCore         ★ pure Swift, Foundation only: domain model, theory, fingering, tab layout
@@ -34,7 +61,7 @@ RiffnexApp (app target: features & composition root)
 | `MusicCore` | — | Foundation only | **Yes.** The domain, theory and fingering tests can run in this container if a Swift toolchain becomes available. |
 | `AnalysisEngine` | MusicCore | AVFoundation, Accelerate, CoreML, MusicUnderstanding | No |
 | `PlaybackEngine` | MusicCore | AVFoundation | No |
-| `Persistence` | MusicCore | SwiftData | No |
+| `Persistence` | MusicCore | Foundation only | **Yes** |
 | `DesignSystem` | MusicCore | SwiftUI, CoreHaptics | No |
 
 Rationale:
@@ -189,7 +216,7 @@ Import ──► Decode & normalize ──┬──► Music Understanding (rhyt
 | 5 | Chords | Pitch-class profiles per beat, computed from the Basic Pitch note activations (folded to 12 classes and bass-weighted) → cosine match against the templates for `ChordQuality` → **Viterbi smoothing** (a self-transition prior favoring chord changes on bar lines). **Power chords:** root and fifth energy present, third below a threshold relative to the root, and/or simultaneous notes forming intervals {0, 7, 12}. | `[ChordEvent]` | Non-fatal |
 | 6 | Sections | Sections and phrases come from Music Understanding. Labels A/B/A′ come from chord-sequence similarity between sections. | `[Section]` | Non-fatal. With no structure, fixed 4/8-bar segments are labeled as *estimated*. |
 | 7 | Fingering | See §5 | `Arrangement` | Fatal for the Studio |
-| 8 | Persist | `SongAnalysis` JSON (atomic write) plus an `AnalysisRecord` summary in SwiftData | — | Fatal |
+| 8 | Persist | `SongAnalysis` JSON (atomic write) plus an `AnalysisRecord` summary in the library index | — | Fatal |
 
 **Concurrency and lifecycle**
 - `AnalysisCoordinator` is an `actor`. Each stage is an `async throws` function. Stages 2 and 3 run concurrently in a `TaskGroup`.
@@ -224,24 +251,23 @@ Weights live in one `FingeringCostModel` struct with documented defaults and are
 
 | Data | Store | Why |
 |---|---|---|
-| `Song` (title, artist, duration, file name, content hash, import date, last opened, analysis status) | SwiftData | Small, queryable, drives the library UI |
-| `AnalysisRecord` (pipeline version, date, BPM, key, quality level, path to JSON) | SwiftData | Summaries for list and overview without loading the JSON |
-| `SongAnalysis` (notes, chords, contours, sections) | **Versioned JSON file** per song | Large arrays are a poor fit for SwiftData rows. Loads atomically and versions cleanly. |
-| `StudioState` (position, loop, speed, mode), `Bookmark`, `UserFingeringOverride` | SwiftData | User state, needs to survive re-analysis |
-| `PracticeSession` (post-MVP, measured values only) | SwiftData | |
+| `Song` + `AnalysisRecord` summary (title, artist, duration, file name, content hash, dates, status, BPM, key, quality) | `library.json`: one index file, loaded at launch and written atomically by the `LibraryStore` actor | A personal library is dozens of songs (KB of data). No query engine needed. |
+| `SongAnalysis` (notes, chords, contours, sections) | **Versioned JSON file** per song | Large immutable payload; loads atomically and versions cleanly |
+| `StudioState` (position, loop, speed, mode), `Bookmark`, `UserFingeringOverride` | `Songs/<uuid>/user-state.json` | Kept separate so re-analysis never overwrites user state |
+| `PracticeSession` (post-MVP, measured values only) | `Songs/<uuid>/practice.json` | |
 | Imported audio | `Application Support/Songs/<uuid>/` | Private, not visible in Files, excluded from iCloud backup (re-importable; saves the user's quota) |
 
-The schema uses `VersionedSchema` and a `SchemaMigrationPlan` from day one. Deleting a song removes its audio, analysis JSON, caches and user state.
+Every file carries `schemaVersion`. Migrations are explicit decode-old → encode-new functions with tests. Writes are atomic (`Data.write(options: .atomic)`), so a crash can never leave a half-written file. Deleting a song removes its audio, analysis JSON, caches and user state.
 
 ## 8. Dependencies
 
 | Dependency | Use | License | Justification |
 |---|---|---|---|
 | Basic Pitch Core ML model (`nmp.mlpackage`, ~270 KB) | Note transcription | Apache-2.0 | Best size-to-quality polyphonic transcription available on-device. Attribution is shown in Settings › Licenses, with the NOTICE included. |
-| XcodeGen (dev tool) | Project generation | MIT | Keeps the project diffable and reviewable. Not shipped. |
+| xtool (dev tool) | Build, sign and install without a Mac | MIT | The only practical path to the owner's iPhone without a Mac. Not shipped. |
 | swift-snapshot-testing (test only, optional) | Visual regression of design-system components | MIT | Catches UI regressions in the fretboard renderer |
 
-Everything else is Apple frameworks: SwiftUI, SwiftData, Observation, AVFoundation, Accelerate, Core ML, MusicUnderstanding, Core Haptics, BackgroundTasks, MediaPlayer and os. **No analytics or ad SDKs.**
+Everything else is Apple frameworks: SwiftUI, Observation, AVFoundation, Accelerate, Core ML, MusicUnderstanding, Core Haptics, BackgroundTasks, MediaPlayer and os. **No analytics or ad SDKs.**
 
 ## 9. Testing strategy
 
@@ -252,8 +278,8 @@ Everything else is Apple frameworks: SwiftUI, SwiftData, Observation, AVFoundati
 | Integration (pipeline) | **Synthesized fixtures** with known ground truth, generated by `tools/fixtures` (Karplus-Strong plucked strings plus click tracks; original and rights-free): single-note riffs, power-chord progressions, open chords, and tempo-ramp clicks. Assertions use mir_eval-style metrics, with thresholds set from *measured* baselines. | iOS simulator |
 | Accuracy harness (not a CI gate at first) | GuitarSet (CC BY 4.0): note onset F1, chord accuracy, and tempo error per `pipelineVersion`. Results go to `docs/quality/` with the exact numbers. **These are the only accuracy numbers RIFFNEX may quote.** | macOS (scripted) |
 | Playback | Clock math (rate, loop, seek, latency offset) as pure functions; engine smoke test on the simulator | iOS simulator |
-| UI (XCUITest) | Onboarding → import (a test-only launch argument injects a fixture URL; compiled only in the `UITests` configuration) → analysis completes → Studio play, pause, loop and speed | iOS simulator |
-| Performance | `XCTMetric` for analysis wall-time on a 3-minute fixture; Instruments (Animation Hitches) for the Studio at 120 Hz; memory high-water mark | Device (manual, per milestone) |
+| UI (XCUITest) | **Deferred.** It needs an Xcode project host, which xtool doesn't provide. Until then: view models are unit-tested, plus a manual on-device checklist per milestone. | — |
+| Performance | In-app **Diagnostics**: per-stage analysis wall-time (`ContinuousClock`), a frame-time and hitch counter driven by `CADisplayLink` in the Studio, and memory high-water mark (`task_vm_info`). MetricKit daily reports. There is no Instruments without a Mac, so numbers come from the device itself. | Owner's iPhone, per milestone |
 
 **Observability:** `os.Logger` per subsystem (`analysis`, `playback`, `persistence`, `ui`) and `OSSignposter` intervals around each pipeline stage. `MetricKit` covers hangs, crashes and energy. A Debug-only **Diagnostics** screen shows stage timings and outcomes for each song. No remote telemetry in the MVP.
 
@@ -278,6 +304,7 @@ Everything else is Apple frameworks: SwiftUI, SwiftData, Observation, AVFoundati
 | ADR-4 | Custom chord estimator on Basic Pitch activations | Chroma from a separate FFT; ML chord model | Reuses data we already have, is transparent and testable, and is good enough for the MVP vocabulary. Upgrade path exists. |
 | ADR-5 | Fingering as DP optimization, separate from transcription | Take positions from a tab model | Positions are a recommendation, not a fact. The DP is explainable and constraint-aware. |
 | ADR-6 | SwiftUI Canvas for the fretboard | Metal, SpriteKit | Scene complexity is low, and Canvas keeps accessibility and text simple. Metal is the escalation path if profiling demands it. |
-| ADR-7 | SwiftData for library and state; JSON files for analysis payloads | All SwiftData; GRDB/SQLite | Native and simple. Large immutable payloads stay out of the object graph. |
+| ADR-7 | Codable JSON files for library, analysis and user state | SwiftData; GRDB/SQLite | SwiftData macros are unproven under xtool. A personal library is small. Plain files are simplest and testable on Linux. |
 | ADR-8 | Pure-Swift `MusicCore` module | Single app target | The highest-risk logic is fully testable in isolation, including on Linux. |
-| ADR-9 | XcodeGen | Committed `.xcodeproj`; Tuist | Reviewable project definition with minimal tooling. |
+| ADR-9 | SwiftPM + xtool, with macOS CI for verification | XcodeGen/Xcode (needs a Mac) | The owner has no Mac. CI on GitHub's macOS runners gives automated compile and test evidence. |
+| ADR-10 | Compile the Core ML model on device at first launch | Precompiled `.mlmodelc` from Xcode | No `coremlc` outside Xcode. `MLModel.compileModel(at:)` is a public API, and the result is cached. |
