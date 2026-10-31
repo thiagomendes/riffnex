@@ -45,6 +45,7 @@ final class AnalysisCenter {
     @ObservationIgnored private let log = Logger(subsystem: RXLog.subsystem, category: "analysis-center")
 
     static let computeUnitsKey = "rx.computeUnits"
+    nonisolated static let stemsDirectoryName = "Stems"
 
     init(store: LibraryStore) {
         self.store = store
@@ -112,15 +113,28 @@ final class AnalysisCenter {
                 await MainActor.run { self?.finish(id, result: .failure(LibraryError.unknownSong(id))) }
                 return
             }
+            // Stems go to a fresh folder and replace the old ones only when the analysis succeeds,
+            // so a cancelled run never leaves half-written instruments behind.
+            let folder = store.folder(for: id)
+            let pending = folder.appendingPathComponent("Stems-\(UUID().uuidString)", isDirectory: true)
             do {
-                let analysis = try await coordinator.analyze(fileURL: store.audioURL(for: song),
-                                                             options: .init(computeUnits: units)) { update in
+                var analysis = try await coordinator.analyze(fileURL: store.audioURL(for: song),
+                                                             options: .init(computeUnits: units, stemsDirectory: pending)) { update in
                     Task { @MainActor in self?.apply(update, for: id) }
                 }
                 try Task.checkCancellation()
+                if analysis.stems != nil {
+                    let final = folder.appendingPathComponent(AnalysisCenter.stemsDirectoryName, isDirectory: true)
+                    try? FileManager.default.removeItem(at: final)
+                    try FileManager.default.moveItem(at: pending, to: final)
+                    analysis.stems?.directory = AnalysisCenter.stemsDirectoryName
+                } else {
+                    try? FileManager.default.removeItem(at: pending)
+                }
                 try await store.save(analysis, for: id)
                 await MainActor.run { self?.finish(id, result: .success(analysis)) }
             } catch {
+                try? FileManager.default.removeItem(at: pending)
                 await MainActor.run { self?.finish(id, result: .failure(error)) }
             }
         }

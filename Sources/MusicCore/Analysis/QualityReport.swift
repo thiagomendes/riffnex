@@ -49,8 +49,10 @@ public struct QualityReport: Codable, Sendable, Equatable {
         self.metrics = metrics
     }
 
+    /// `separated`: notes were detected on separated instrument stems (vocals, drums and bass
+    /// removed), so the vocals no longer contaminate them.
     public static func assess(duration: Seconds, notes: [NoteEvent], chords: [ChordEvent], rhythm: RhythmGrid?,
-                              keys: [KeySpan], activity: InstrumentActivity?) -> QualityReport {
+                              keys: [KeySpan], activity: InstrumentActivity?, separated: Bool = false) -> QualityReport {
         let seconds = max(duration, 0.001)
         let lowFraction = notes.isEmpty ? 0 : Double(notes.filter { $0.confidence.level == .low }.count) / Double(notes.count)
         let chordSeconds = chords.filter { $0.chord != nil }.map { $0.end - $0.start }.reduce(0, +)
@@ -63,7 +65,7 @@ public struct QualityReport: Codable, Sendable, Equatable {
         if rhythm == nil || (rhythm?.beats.count ?? 0) < 2 { reasons.append(.noBeatGrid) }
         if let variation = metrics.beatIntervalVariation, variation > 0.1 { reasons.append(.unsteadyTempo) }
         if keys.isEmpty { reasons.append(.noKey) }
-        if let vocal = metrics.meanVocalActivity, let other = metrics.meanOtherActivity, vocal > 0.3, vocal > other {
+        if !separated, let vocal = metrics.meanVocalActivity, let other = metrics.meanOtherActivity, vocal > 0.3, vocal > other {
             reasons.append(.vocalsDominant)
         }
         if metrics.notesPerSecond < 0.3 { reasons.append(.fewNotes) }

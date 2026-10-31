@@ -6,6 +6,8 @@ import Observation
 import os
 
 /// Plays one song with precise seeking, pitch-preserving speed change and gapless looping.
+/// The song is either the original mix (one track) or its separated instruments (one track
+/// per stem, each with its own volume), started together at a shared host time.
 ///
 /// Graph: `AVAudioPlayerNode ─┐
 ///         metronome source ──┴→ mixer → AVAudioUnitTimePitch → mainMixer`.
@@ -30,6 +32,24 @@ public final class AudioPlayer {
     public private(set) var countInEnabled = false
     /// Whether a beat grid is available (metronome and count-in need one).
     public private(set) var hasBeatGrid = false
+    /// Separated instruments currently loaded (empty when playing the original mix).
+    public private(set) var stemNames: [String] = []
+    public private(set) var stemVolumes: [String: Float] = [:]
+
+    public struct StemSource: Sendable {
+        public let name: String
+        public let url: URL
+
+        public init(name: String, url: URL) {
+            self.name = name
+            self.url = url
+        }
+    }
+
+    private struct Track {
+        let node: AVAudioPlayerNode
+        let file: AVAudioFile
+    }
 
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -41,7 +61,8 @@ public final class AudioPlayer {
     @ObservationIgnored private var barTimes: [Seconds] = []
     /// Silent frames before the first scheduled segment (the count-in).
     @ObservationIgnored private var leadFrames: Int64 = 0
-    @ObservationIgnored private var file: AVAudioFile?
+    @ObservationIgnored private var tracks: [Track] = []
+    @ObservationIgnored private var stemNodes: [String: AVAudioPlayerNode] = [:]
     @ObservationIgnored private var sampleRate: Double = 44_100
     @ObservationIgnored private var fileLength: Int64 = 0
     @ObservationIgnored private var startFrame: Int64 = 0
@@ -64,11 +85,16 @@ public final class AudioPlayer {
 
     // MARK: Loading
 
-    public func load(url: URL, title: String, artist: String?) throws {
+    /// Loads a song. With `stems`, the separated instruments play instead of the original file;
+    /// they must all have the same sample rate (the separator writes 44.1 kHz stereo).
+    public func load(url: URL, title: String, artist: String?, stems: [StemSource] = []) throws {
         stopInternal()
         if engine.isRunning { engine.stop() }
-        let file = try AVAudioFile(forReading: url)
-        let format = file.processingFormat
+        for node in stemNodes.values {
+            engine.disconnectNodeOutput(node)
+            engine.detach(node)
+        }
+        stemNodes = [:]
         engine.disconnectNodeOutput(player)
         engine.disconnectNodeOutput(songMixer)
         engine.disconnectNodeOutput(timePitch)
@@ -76,22 +102,41 @@ public final class AudioPlayer {
             engine.disconnectNodeOutput(old)
             engine.detach(old)
         }
+
+        var newTracks: [Track] = []
+        if stems.isEmpty {
+            newTracks = [Track(node: player, file: try AVAudioFile(forReading: url))]
+        } else {
+            for stem in stems {
+                let node = AVAudioPlayerNode()
+                engine.attach(node)
+                stemNodes[stem.name] = node
+                newTracks.append(Track(node: node, file: try AVAudioFile(forReading: stem.url)))
+            }
+        }
+        let format = newTracks[0].file.processingFormat
         metronome.reset(sampleRate: format.sampleRate)
         let click = metronome.makeNode(format: format)
         engine.attach(click)
         clickNode = click
         // iOS 27 replaced the non-throwing connect/play with throwing variants that report failures.
         // Mixer inputs: each connection takes the next free input bus.
-        try engine.connectNode(player, to: songMixer, format: format)
+        for track in newTracks {
+            try engine.connectNode(track.node, to: songMixer, format: track.file.processingFormat)
+        }
         try engine.connectNode(click, to: songMixer, format: format)
         try engine.connectNode(songMixer, to: timePitch, format: format)
         try engine.connectNode(timePitch, to: engine.mainMixerNode, format: format)
         engine.prepare()
 
-        self.file = file
+        tracks = newTracks
         sampleRate = format.sampleRate
-        fileLength = file.length
+        fileLength = newTracks.map(\.file.length).min() ?? 0
         duration = Double(fileLength) / sampleRate
+        stemNames = stems.map(\.name)
+        let previous = stemVolumes
+        stemVolumes = Dictionary(uniqueKeysWithValues: stems.map { ($0.name, previous[$0.name] ?? 1) })
+        for (name, volume) in stemVolumes { stemNodes[name]?.volume = volume }
         pausedFrame = 0
         startFrame = 0
         loop = nil
@@ -106,13 +151,20 @@ public final class AudioPlayer {
         isLoaded = true
         lastError = nil
         updateNowPlaying()
-        log.info("Loaded \(url.lastPathComponent, privacy: .public): \(self.duration, privacy: .public)s")
+        log.info("Loaded \(url.lastPathComponent, privacy: .public) with \(stems.count) stems: \(self.duration, privacy: .public)s")
+    }
+
+    /// Volume (0…1) of one separated instrument, while it plays.
+    public func setVolume(_ volume: Float, forStem name: String) {
+        let clamped = min(max(volume, 0), 1)
+        stemVolumes[name] = clamped
+        stemNodes[name]?.volume = clamped
     }
 
     public func unload() {
         stopInternal()
         if engine.isRunning { engine.stop() }
-        file = nil
+        tracks = []
         isLoaded = false
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
@@ -227,8 +279,8 @@ public final class AudioPlayer {
 
     /// While a count-in is sounding: beats left before the song starts (e.g. 4, 3, 2, 1).
     public var countInBeatsRemaining: Int? {
-        guard isPlaying, leadFrames > 0, let nodeTime = player.lastRenderTime,
-              let playerTime = player.playerTime(forNodeTime: nodeTime) else { return nil }
+        guard isPlaying, leadFrames > 0, let primary = tracks.first?.node, let nodeTime = primary.lastRenderTime,
+              let playerTime = primary.playerTime(forNodeTime: nodeTime) else { return nil }
         let remaining = leadFrames - playerTime.sampleTime
         guard remaining > 0, let interval = beatIntervalFrames, interval > 0 else { return nil }
         return Int((remaining + interval - 1) / interval)
@@ -270,9 +322,9 @@ public final class AudioPlayer {
     }
 
     private func currentFrame(compensated: Bool) -> Int64 {
-        guard isPlaying,
-              let nodeTime = player.lastRenderTime,
-              let playerTime = player.playerTime(forNodeTime: nodeTime) else { return pausedFrame }
+        guard isPlaying, let primary = tracks.first?.node,
+              let nodeTime = primary.lastRenderTime,
+              let playerTime = primary.playerTime(forNodeTime: nodeTime) else { return pausedFrame }
         var rendered = playerTime.sampleTime - leadFrames
         if compensated {
             // Audio rendered now is heard after the output latency; at speed r, the source advances r× faster.
@@ -287,7 +339,7 @@ public final class AudioPlayer {
 
     private func haltPlayer() {
         generation += 1 // completion handlers from the old schedule become no-ops
-        player.stop()
+        for track in tracks { track.node.stop() }
         metronome.stop()
     }
 
@@ -301,7 +353,7 @@ public final class AudioPlayer {
     /// Starts the player node; on failure records the error and leaves playback stopped.
     private func startNode() -> Bool {
         do {
-            try player.playAudio()
+            for track in tracks { try track.node.playAudio() }
             return true
         } catch {
             haltPlayer()
@@ -312,7 +364,7 @@ public final class AudioPlayer {
     }
 
     private func schedule(from frame: Int64, countIn: Bool = false) {
-        guard let file else { return }
+        guard !tracks.isEmpty else { return }
         haltPlayer()
         let current = generation
         startFrame = min(max(0, frame), fileLength)
@@ -324,39 +376,59 @@ public final class AudioPlayer {
             countInBeats = beatsPerBar
             interval = beat
         }
-        leadFrames = Int64(countInBeats) * interval
-        metronome.start(at: startFrame, loop: activeFrameLoop.map { ($0.start, $0.end) },
-                        countInBeats: countInBeats, interval: interval)
-        let firstAt = leadFrames > 0 ? AVAudioTime(sampleTime: leadFrames, atRate: sampleRate) : nil
-
-        if let loop = activeFrameLoop, startFrame < loop.end {
-            scheduleSegment(file, from: startFrame, to: loop.end, at: firstAt, generation: current, onEnd: nil)
-            enqueueLoopIteration(file, loop, generation: current)
-            enqueueLoopIteration(file, loop, generation: current)
+        let countInFrames = Int64(countInBeats) * interval
+        let loopFrames = activeFrameLoop.map { ($0.start, $0.end) }
+        let firstAt: AVAudioTime?
+        if tracks.count == 1 {
+            // One track: delay it on its own timeline; the metronome starts in the same render cycle.
+            leadFrames = countInFrames
+            metronome.start(at: startFrame, loop: loopFrames, countInBeats: countInBeats, interval: interval, startHost: nil, rate: rate)
+            firstAt = leadFrames > 0 ? AVAudioTime(sampleTime: leadFrames, atRate: sampleRate) : nil
         } else {
-            scheduleSegment(file, from: startFrame, to: fileLength, at: firstAt, generation: current) { [weak self] in
-                self?.reachedEnd(generation: current)
+            // Several stems: every track (and the metronome) starts at one shared host time, so they
+            // stay sample-aligned even if the render thread runs between the individual starts.
+            let preroll = 0.08
+            let leadSeconds = preroll + Double(countInFrames) / (sampleRate * rate)
+            let startHost = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: leadSeconds)
+            leadFrames = Int64((leadSeconds * sampleRate * rate).rounded()) // in player samples, for the clock
+            metronome.start(at: startFrame, loop: loopFrames, countInBeats: countInBeats, interval: interval,
+                            startHost: AVAudioTime.hostTime(forSeconds: AVAudioTime.seconds(forHostTime: startHost)
+                                                            - Double(countInFrames) / (sampleRate * rate)),
+                            rate: rate)
+            firstAt = AVAudioTime(hostTime: startHost)
+        }
+
+        for (index, track) in tracks.enumerated() {
+            let reportsEnd = index == 0
+            if let loop = activeFrameLoop, startFrame < loop.end {
+                scheduleSegment(track, from: startFrame, to: loop.end, at: firstAt, generation: current, onEnd: nil)
+                enqueueLoopIteration(track, loop, generation: current)
+                enqueueLoopIteration(track, loop, generation: current)
+            } else {
+                scheduleSegment(track, from: startFrame, to: fileLength, at: firstAt, generation: current) { [weak self] in
+                    if reportsEnd { self?.reachedEnd(generation: current) }
+                }
             }
         }
     }
 
-    private func enqueueLoopIteration(_ file: AVAudioFile, _ loop: PlaybackPosition.FrameLoop, generation current: Int) {
-        scheduleSegment(file, from: loop.start, to: loop.end, generation: current) { [weak self] in
+    private func enqueueLoopIteration(_ track: Track, _ loop: PlaybackPosition.FrameLoop, generation current: Int) {
+        scheduleSegment(track, from: loop.start, to: loop.end, generation: current) { [weak self] in
             // Keep two iterations queued so the loop never runs dry.
-            guard let self, self.generation == current, let file = self.file else { return }
-            self.enqueueLoopIteration(file, loop, generation: current)
+            guard let self, self.generation == current else { return }
+            self.enqueueLoopIteration(track, loop, generation: current)
         }
     }
 
-    private func scheduleSegment(_ file: AVAudioFile, from start: Int64, to end: Int64, at when: AVAudioTime? = nil,
+    private func scheduleSegment(_ track: Track, from start: Int64, to end: Int64, at when: AVAudioTime? = nil,
                                  generation current: Int, onEnd: (@MainActor () -> Void)?) {
         let count = end - start
         guard count > 0 else {
             onEnd?()
             return
         }
-        player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(count), at: when,
-                               completionCallbackType: .dataConsumed) { [weak self] _ in
+        track.node.scheduleSegment(track.file, startingFrame: start, frameCount: AVAudioFrameCount(count), at: when,
+                                   completionCallbackType: .dataConsumed) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.generation == current else { return }
                 onEnd?()
@@ -474,6 +546,9 @@ final class MetronomeBox: @unchecked Sendable {
     private struct State {
         var renderer: MetronomeRenderer
         var scratch = [Float](repeating: 0, count: 4096)
+        /// When set, the first render computes how many frames of silence precede this host time.
+        var startHost: UInt64?
+        var rate: Double = 1
     }
 
     private let lock = OSAllocatedUnfairLock(initialState: State(renderer: MetronomeRenderer(sampleRate: 44_100)))
@@ -486,19 +561,30 @@ final class MetronomeBox: @unchecked Sendable {
     func setEnabled(_ enabled: Bool) { lock.withLock { $0.renderer.enabled = enabled } }
     func stop() { lock.withLock { $0.renderer.stop() } }
 
-    func start(at frame: Int64, loop: (Int64, Int64)?, countInBeats: Int, interval: Int64) {
+    /// `startHost`: host time at which the first click (count-in or song) must sound; nil = now.
+    func start(at frame: Int64, loop: (Int64, Int64)?, countInBeats: Int, interval: Int64, startHost: UInt64?, rate: Double) {
         lock.withLock { state in
             state.renderer.start(at: frame, loop: loop.map { (start: $0.0, end: $0.1) },
                                  countInBeats: countInBeats, interval: interval)
+            state.startHost = startHost
+            state.rate = rate
         }
     }
 
     func makeNode(format: AVAudioFormat) -> AVAudioSourceNode {
-        AVAudioSourceNode(format: format) { [self] isSilence, _, frameCount, bufferList -> OSStatus in
+        let sampleRate = format.sampleRate
+        return AVAudioSourceNode(format: format) { [self] isSilence, timestamp, frameCount, bufferList -> OSStatus in
             let count = Int(frameCount)
             let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
+            let bufferHost = timestamp.pointee.mHostTime
             // Unchecked: the closure touches the render buffers (non-Sendable pointers), synchronously.
             lock.withLockUnchecked { state in
+                if let startHost = state.startHost, bufferHost > 0 {
+                    // This node renders song frames at `rate` × real time (it sits before the time-pitch unit).
+                    let seconds = startHost > bufferHost ? AVAudioTime.seconds(forHostTime: startHost - bufferHost) : 0
+                    state.renderer.delay(frames: Int64((seconds * sampleRate * state.rate).rounded()))
+                    state.startHost = nil
+                }
                 state.renderer.render(count, into: &state.scratch)
                 var silent = true
                 for buffer in buffers {

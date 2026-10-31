@@ -52,6 +52,7 @@ public struct AnalysisSource: Codable, Sendable, Hashable {
         case basicPitch
         case musicUnderstanding
         case chordEstimator
+        case stemSeparator
         case fingeringOptimizer
         case user
     }

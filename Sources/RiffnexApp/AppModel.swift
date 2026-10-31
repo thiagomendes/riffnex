@@ -160,5 +160,17 @@ final class AppModel {
 
     func audioURL(for song: SongRecord) -> URL { store.audioURL(for: song) }
 
+    /// The separated instruments of an analyzed song, in a fixed, friendly order, if they exist on disk.
+    func stemSources(for song: SongRecord) -> [AudioPlayer.StemSource] {
+        guard let stems = analysis.analyses[song.id]?.stems else { return [] }
+        let folder = store.folder(for: song.id).appendingPathComponent(stems.directory, isDirectory: true)
+        let order = ["guitar", "bass", "drums", "vocals", "piano", "other"]
+        let sources = order.filter(stems.names.contains).map {
+            AudioPlayer.StemSource(name: $0, url: folder.appendingPathComponent("\($0).m4a"))
+        }
+        guard sources.allSatisfy({ FileManager.default.fileExists(atPath: $0.url.path) }) else { return [] }
+        return sources
+    }
+
     func artworkURL(for song: SongRecord) -> URL? { song.hasArtwork ? store.artworkURL(for: song.id) : nil }
 }

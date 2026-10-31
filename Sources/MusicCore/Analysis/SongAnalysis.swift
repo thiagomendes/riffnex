@@ -21,11 +21,14 @@ public struct SongAnalysis: Codable, Sendable, Equatable {
     public var components: [AnalysisSource]
     /// Non-fatal failures of individual stages (stage name → message), shown in the Overview.
     public var stageErrors: [String: String]
+    /// Separated instruments, when the song was separated before note detection.
+    public var stems: StemInfo?
 
     public init(schemaVersion: Int = SongAnalysis.currentSchemaVersion, createdAt: Date = Date(), duration: Seconds,
                 rhythm: RhythmGrid?, keys: [KeySpan], sections: [SongSection], notes: [NoteEvent],
                 chords: [ChordEvent], activity: InstrumentActivity?, quality: QualityReport,
-                noteReport: NotePostProcessor.Report, timings: [StageTiming], components: [AnalysisSource], stageErrors: [String: String] = [:]) {
+                noteReport: NotePostProcessor.Report, timings: [StageTiming], components: [AnalysisSource], stageErrors: [String: String] = [:],
+                stems: StemInfo? = nil) {
         self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.duration = duration
@@ -40,6 +43,7 @@ public struct SongAnalysis: Codable, Sendable, Equatable {
         self.timings = timings
         self.components = components
         self.stageErrors = stageErrors
+        self.stems = stems
     }
 
     /// The key that covers most of the song, if any.
@@ -178,5 +182,37 @@ public struct StageTiming: Codable, Sendable, Equatable {
     public init(stage: String, seconds: Double) {
         self.stage = stage
         self.seconds = seconds
+    }
+}
+
+/// The separated instruments of a song (Demucs), stored as `<song folder>/<directory>/<name>.m4a`.
+public struct StemInfo: Codable, Sendable, Equatable {
+    public var model: String
+    /// Source names in model order: drums, bass, other, vocals, guitar, piano.
+    public var names: [String]
+    public var directory: String
+    /// Which stems the notes were detected on (e.g. ["guitar"] or ["guitar", "piano", "other"]).
+    public var noteSources: [String]
+    /// Share of the pitched-instrument energy per stem (guitar, piano, other), 0…1.
+    public var energyShare: [String: Double]
+    public var seconds: Double
+
+    public init(model: String, names: [String], directory: String, noteSources: [String],
+                energyShare: [String: Double], seconds: Double) {
+        self.model = model
+        self.names = names
+        self.directory = directory
+        self.noteSources = noteSources
+        self.energyShare = energyShare
+        self.seconds = seconds
+    }
+
+    /// Notes come from the guitar alone when it clearly dominates the pitched instruments;
+    /// otherwise from all of them (vocals, drums and bass are always left out). Demucs' guitar
+    /// stem misses some guitar sounds (it labels our synthesized demo guitar as piano), so a
+    /// guitar-only choice needs a clear majority.
+    public static func noteSources(energyShare: [String: Double]) -> [String] {
+        if (energyShare["guitar"] ?? 0) >= 0.5 { return ["guitar"] }
+        return ["guitar", "piano", "other"]
     }
 }

@@ -8,6 +8,7 @@ enum AnalysisText {
         switch stage {
         case .decoding: "Lendo o áudio"
         case .musicUnderstanding: "Tempo, tom e seções"
+        case .separating: "Separando instrumentos"
         case .notes: "Detectando notas"
         case .assembling: "Montando acordes e seções"
         }
@@ -17,6 +18,7 @@ enum AnalysisText {
         switch stage {
         case .decoding: "Convertendo o arquivo para análise."
         case .musicUnderstanding: "Music Understanding da Apple. Não informa progresso, então mostramos só o tempo decorrido."
+        case .separating: "Demucs separa bateria, baixo, voz, guitarra, piano e outros. As notas são detectadas sem voz, bateria e baixo."
         case .notes: "Modelo Basic Pitch, janela por janela de 2 segundos."
         case .assembling: "Limpeza para guitarra, acordes por batida e rótulos de seção."
         }
@@ -70,6 +72,7 @@ enum AnalysisText {
     static func stageError(_ stage: String) -> String {
         switch stage {
         case AnalysisCoordinator.Stage.musicUnderstanding.rawValue: "Tempo, tom e seções indisponíveis"
+        case AnalysisCoordinator.Stage.separating.rawValue: "Separação de instrumentos falhou; notas detectadas na mixagem inteira"
         default: stage
         }
     }

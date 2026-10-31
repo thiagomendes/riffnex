@@ -19,7 +19,8 @@ import os
 /// persists the returned `SongAnalysis` atomically.
 public actor AnalysisCoordinator {
     public enum Stage: String, Sendable, CaseIterable {
-        case decoding, musicUnderstanding, notes, assembling
+        // Order = how far along the analysis is (Music Understanding runs alongside the later stages).
+        case decoding, musicUnderstanding, separating, notes, assembling
     }
 
     public struct Update: Sendable, Equatable {
@@ -33,11 +34,15 @@ public actor AnalysisCoordinator {
         public var computeUnits: MLComputeUnits
         public var tuning: Tuning
         public var runMusicUnderstanding: Bool
+        /// Where to write separated instruments; nil skips separation (notes from the full mix).
+        public var stemsDirectory: URL?
 
-        public init(computeUnits: MLComputeUnits = .all, tuning: Tuning = .standard, runMusicUnderstanding: Bool = true) {
+        public init(computeUnits: MLComputeUnits = .all, tuning: Tuning = .standard, runMusicUnderstanding: Bool = true,
+                    stemsDirectory: URL? = nil) {
             self.computeUnits = computeUnits
             self.tuning = tuning
             self.runMusicUnderstanding = runMusicUnderstanding
+            self.stemsDirectory = stemsDirectory
         }
     }
 
@@ -53,9 +58,11 @@ public actor AnalysisCoordinator {
 
     private static let log = Logger(subsystem: RXLog.subsystem, category: "analysis")
     private let model: BasicPitchModel
+    private let separator: StemSeparator
 
-    public init(model: BasicPitchModel = BasicPitchModel()) {
+    public init(model: BasicPitchModel = BasicPitchModel(), separator: StemSeparator = StemSeparator()) {
         self.model = model
+        self.separator = separator
     }
 
     public static var musicUnderstandingVersion: String {
@@ -84,12 +91,60 @@ public actor AnalysisCoordinator {
         try await model.load(computeUnits: options.computeUnits)
         timings.append(StageTiming(stage: "modelLoad", seconds: (clock.now - start).seconds))
 
-        // 3. Music Understanding and Basic Pitch in parallel.
-        let samples = decoded.samples
+        // 3. Music Understanding runs in parallel with separation and note detection.
         let units = options.computeUnits
         let model = self.model
         async let understanding = Self.runMusicUnderstanding(fileURL: fileURL, enabled: options.runMusicUnderstanding,
                                                              onUpdate: onUpdate)
+
+        // 4. Separate the instruments, and detect notes on the pitched ones only.
+        var samples = decoded.samples
+        var stems: StemInfo?
+        var stageErrors: [String: String] = [:]
+        if let directory = options.stemsDirectory, StemSeparator.isAvailable {
+            onUpdate(Update(stage: .separating, fraction: 0))
+            let separationStart = clock.now
+            do {
+                let result = try await separator.separate(fileURL: fileURL, into: directory, computeUnits: units) { progress in
+                    onUpdate(Update(stage: .separating, fraction: progress.fraction,
+                                    detail: "\(progress.segment)/\(progress.segments)"))
+                }
+                let pitched = ["guitar", "piano", "other"]
+                var decodedStems: [String: [Float]] = [:]
+                var energy: [String: Double] = [:]
+                for name in pitched {
+                    guard let url = result.stems[name] else { continue }
+                    let mono = try AudioDecoder.decodeMono(url: url, sampleRate: BasicPitchModel.Constants.sampleRate).samples
+                    decodedStems[name] = mono
+                    energy[name] = mono.reduce(0) { $0 + Double($1) * Double($1) } / Double(max(mono.count, 1))
+                }
+                let total = energy.values.reduce(0, +)
+                let share = total > 0 ? energy.mapValues { $0 / total } : [:]
+                let sources = StemInfo.noteSources(energyShare: share).filter { decodedStems[$0] != nil }
+                if !sources.isEmpty, total > 0 {
+                    let length = sources.compactMap { decodedStems[$0]?.count }.min() ?? 0
+                    var mixed = [Float](repeating: 0, count: length)
+                    for name in sources {
+                        guard let stem = decodedStems[name] else { continue }
+                        for i in 0..<length { mixed[i] += stem[i] }
+                    }
+                    samples = mixed
+                    stems = StemInfo(model: StemSeparator.modelVersion, names: Array(result.stems.keys).sorted(),
+                                     directory: directory.lastPathComponent, noteSources: sources, energyShare: share,
+                                     seconds: result.seconds)
+                }
+                timings.append(StageTiming(stage: Stage.separating.rawValue, seconds: (clock.now - separationStart).seconds))
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // Separation is an improvement, not a requirement: fall back to the full mix.
+                Self.log.error("Separation failed: \(error.localizedDescription, privacy: .public)")
+                stageErrors[Stage.separating.rawValue] = error.localizedDescription
+                try? FileManager.default.removeItem(at: directory)
+            }
+        }
+        try Task.checkCancellation()
+
         let notesStart = clock.now
         let activations = try await Self.runBasicPitch(samples: samples, model: model, computeUnits: units,
                                                        onUpdate: onUpdate)
@@ -106,8 +161,9 @@ public actor AnalysisCoordinator {
                                             musicUnderstanding: mu.result,
                                             musicUnderstandingVersion: Self.musicUnderstandingVersion,
                                             basicPitchVersion: BasicPitchModel.Constants.modelVersion,
-                                            tuning: options.tuning, timings: timings)
+                                            tuning: options.tuning, timings: timings, stems: stems)
         var analysis = AnalysisAssembler.assemble(input)
+        analysis.stageErrors.merge(stageErrors) { $1 }
         if let failure = mu.failure { analysis.stageErrors[Stage.musicUnderstanding.rawValue] = failure }
         Self.log.info("Analysis done: \(analysis.notes.count) notes, \(analysis.chords.count) chords, quality \(analysis.quality.level.rawValue, privacy: .public)")
         return analysis

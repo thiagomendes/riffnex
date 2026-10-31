@@ -27,6 +27,7 @@ struct StudioPanel: View {
     @AppStorage("rx.countIn") private var countIn = true
     @State private var inspected: [ArrangedNote]?
     @State private var selectedSection: Int? // index into analysis.sections; nil = whole song
+    @State private var showingMixer = false
 
     private var player: AudioPlayer { app.player }
     private var effectiveMode: Mode { mode ?? suggestedMode }
@@ -46,6 +47,15 @@ struct StudioPanel: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 220)
                 Spacer()
+                if !player.stemNames.isEmpty {
+                    Button {
+                        showingMixer = true
+                    } label: {
+                        Label("Instrumentos", systemImage: "slider.vertical.3")
+                            .font(.footnote.weight(.semibold))
+                    }
+                    .accessibilityHint("Aumente ou abaixe cada instrumento")
+                }
                 moreMenu
             }
             sectionChips
@@ -66,6 +76,10 @@ struct StudioPanel: View {
             }
             .frame(height: effectiveMode == .riff ? 270 : 230)
             speedChips
+        }
+        .sheet(isPresented: $showingMixer) {
+            StemMixerSheet(player: player)
+                .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: Binding(get: { inspected != nil }, set: { if !$0 { inspected = nil } })) {
             if let notes = inspected, let layout = app.analysis.layouts[song.id] {

@@ -410,6 +410,7 @@ struct SongOverviewView: View {
         case .musicUnderstanding: "Tempo, tom e seções: Music Understanding"
         case .chordEstimator: "Acordes: estimador RIFFNEX"
         case .fingeringOptimizer: "Digitação"
+        case .stemSeparator: "Separação de instrumentos: Demucs (Meta)"
         case .user: "Edição do usuário"
         }
     }
@@ -421,6 +422,7 @@ struct SongOverviewView: View {
         case "notes": "Detecção de notas"
         case "musicUnderstanding": "Music Understanding"
         case "postprocess": "Acordes e seções"
+        case "separating": "Separação de instrumentos"
         default: stage
         }
     }

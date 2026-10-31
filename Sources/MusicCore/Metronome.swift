@@ -40,6 +40,9 @@ public struct MetronomeRenderer: Sendable {
     private var countInBeats = 0
     private var songStart: Int64 = 0
     private var loop: (start: Int64, end: Int64)?
+    /// Silent frames to render before the cursor starts moving (aligns the metronome with a
+    /// host-time start shared with the song players).
+    private var delayRemaining: Int64 = 0
 
     // Click synthesis state (carries across buffers).
     private var clickRemaining = 0
@@ -66,6 +69,12 @@ public struct MetronomeRenderer: Sendable {
         cursor = frame - lead
         armed = true
         clickRemaining = 0
+        delayRemaining = 0
+    }
+
+    /// Holds the metronome silent for `frames` frames before it starts (count-in included).
+    public mutating func delay(frames: Int64) {
+        delayRemaining = max(0, frames)
     }
 
     public mutating func stop() {
@@ -82,6 +91,10 @@ public struct MetronomeRenderer: Sendable {
         for i in 0..<count { output[i] = 0 }
         guard armed else { return }
         for i in 0..<count {
+            if delayRemaining > 0 {
+                delayRemaining -= 1
+                continue
+            }
             let frame = cursor
             if enabled, let accent = clickAccent(at: frame) { trigger(accent: accent) }
             if clickRemaining > 0 {

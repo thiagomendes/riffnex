@@ -75,4 +75,12 @@ struct MetronomeTests {
         #expect(grid.beats == [0, 500, 1000, 1500, 2000])
         #expect(grid.downbeats == [0, 2000])
     }
+
+    @Test func delayShiftsEverythingLater() {
+        var m = MetronomeRenderer(sampleRate: rate, grid: .init(beats: [100, 600], downbeats: []))
+        m.start(at: 0, loop: nil)
+        m.delay(frames: 250)
+        let out = render(&m, frames: 1000, chunk: 64)
+        #expect(onsets(out) == [351, 851])
+    }
 }

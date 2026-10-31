@@ -14,11 +14,14 @@ public enum AnalysisAssembler {
         public var tuning: Tuning
         public var decoderParameters: NoteDecoder.Parameters
         public var timings: [StageTiming]
+        /// Separated instruments the notes were detected on, if any.
+        public var stems: StemInfo?
 
         public init(duration: Seconds, notes: ActivationMatrix, onsets: ActivationMatrix,
                     musicUnderstanding: MusicUnderstandingResult?, musicUnderstandingVersion: String,
                     basicPitchVersion: String, tuning: Tuning = .standard,
-                    decoderParameters: NoteDecoder.Parameters = .reference, timings: [StageTiming] = []) {
+                    decoderParameters: NoteDecoder.Parameters = .reference, timings: [StageTiming] = [],
+                    stems: StemInfo? = nil) {
             self.duration = duration
             self.notes = notes
             self.onsets = onsets
@@ -28,6 +31,7 @@ public enum AnalysisAssembler {
             self.tuning = tuning
             self.decoderParameters = decoderParameters
             self.timings = timings
+            self.stems = stems
         }
     }
 
@@ -55,7 +59,7 @@ public enum AnalysisAssembler {
         let sections = SectionLabeler().label(ranges: mu?.sectionRanges ?? [], notes: notes, chords: chords,
                                               duration: input.duration)
         let quality = QualityReport.assess(duration: input.duration, notes: notes, chords: chords, rhythm: rhythm,
-                                           keys: keys, activity: activity)
+                                           keys: keys, activity: activity, separated: input.stems != nil)
 
         var timings = input.timings
         timings.append(StageTiming(stage: "postprocess", seconds: Self.seconds(clock.now - start)))
@@ -64,9 +68,12 @@ public enum AnalysisAssembler {
         if mu != nil {
             components.append(AnalysisSource(component: .musicUnderstanding, version: input.musicUnderstandingVersion))
         }
+        if let stems = input.stems {
+            components.append(AnalysisSource(component: .stemSeparator, version: stems.model))
+        }
         return SongAnalysis(createdAt: createdAt, duration: input.duration, rhythm: rhythm, keys: keys,
                             sections: sections, notes: notes, chords: chords, activity: activity, quality: quality,
-                            noteReport: noteReport, timings: timings, components: components)
+                            noteReport: noteReport, timings: timings, components: components, stems: input.stems)
     }
 
     static func seconds(_ duration: Duration) -> Double {

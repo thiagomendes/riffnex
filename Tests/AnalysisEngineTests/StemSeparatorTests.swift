@@ -146,3 +146,24 @@ struct StemSeparatorTests {
         return num / max((da * db).squareRoot(), 1e-12)
     }
 }
+
+@Suite("Analysis with separation", .serialized)
+struct SeparatedAnalysisTests {
+    @Test(.timeLimit(.minutes(10)))
+    func notesComeFromPitchedStems() async throws {
+        guard StemSeparator.isAvailable else { return }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("stems-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = AnalysisCoordinator()
+        let analysis = try await coordinator.analyze(
+            fileURL: SeparationFixtures.demo,
+            options: .init(computeUnits: .cpuOnly, runMusicUnderstanding: false, stemsDirectory: directory)) { _ in }
+        let stems = try #require(analysis.stems)
+        print("[separated analysis] sources \(stems.noteSources), share \(stems.energyShare.mapValues { (($0 * 100).rounded()) / 100 }), notes \(analysis.notes.count), chords \(analysis.chords.compactMap { $0.chord?.symbol() }), timings \(analysis.timings.map { "\($0.stage)=\(String(format: "%.1f", $0.seconds))" })")
+        #expect(stems.names.count == 6)
+        #expect(!stems.noteSources.contains("vocals") && !stems.noteSources.contains("drums"))
+        #expect(analysis.notes.count > 30)
+        #expect(analysis.components.contains { $0.component == .stemSeparator })
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("guitar.m4a").path))
+    }
+}

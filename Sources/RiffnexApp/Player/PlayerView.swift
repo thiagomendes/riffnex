@@ -49,6 +49,7 @@ struct PlayerView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .task { await restore() }
+        .onChange(of: app.analysis.analyses[song.id]?.createdAt) { _, _ in reloadForNewAnalysis() }
         .onDisappear { Task { await persist(pausing: true) } }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { Task { await persist(pausing: false) } }
@@ -204,8 +205,10 @@ struct PlayerView: View {
     private func restore() async {
         guard !restored else { return }
         restored = true
+        await app.analysis.load(song.id)
         do {
-            try player.load(url: app.audioURL(for: song), title: song.title, artist: song.artist)
+            try player.load(url: app.audioURL(for: song), title: song.title, artist: song.artist,
+                            stems: app.stemSources(for: song))
         } catch {
             loadError = "Não foi possível abrir o áudio: \(error.localizedDescription)"
             return
@@ -217,6 +220,28 @@ struct PlayerView: View {
         player.seek(to: min(state.position, player.duration))
         if state.loopEnabled { player.setLoopEnabled(true) }
         await app.markOpened(song)
+    }
+
+    /// A new analysis brought separated instruments: switch the player to them, keeping the place.
+    private func reloadForNewAnalysis() {
+        guard restored, loadError == nil else { return }
+        let stems = app.stemSources(for: song)
+        guard stems.map(\.name) != player.stemNames else { return }
+        let position = player.currentTime
+        let rate = player.rate
+        let loop = player.loop
+        let loopEnabled = player.loopEnabled
+        player.pause()
+        do {
+            try player.load(url: app.audioURL(for: song), title: song.title, artist: song.artist, stems: stems)
+        } catch {
+            // Keep playing the original mix if the stems cannot be opened.
+            try? player.load(url: app.audioURL(for: song), title: song.title, artist: song.artist)
+        }
+        player.setRate(rate)
+        if let loop, loop.end <= player.duration { player.setLoop(loop) }
+        player.seek(to: min(position, player.duration))
+        if loopEnabled { player.setLoopEnabled(true) }
     }
 
     private func persist(pausing: Bool) async {
