@@ -97,4 +97,33 @@ struct AudioPlayerTests {
         #expect(player.currentTime == 0)
         #expect(player.loop == nil)
     }
+
+    @Test func metronomeNeedsAGridAndCountInHoldsThePosition() async throws {
+        let url = try makeTone(seconds: 4)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let player = AudioPlayer()
+        try player.load(url: url, title: "Tom", artist: nil)
+        player.setMetronomeEnabled(true)
+        #expect(!player.metronomeEnabled) // no grid yet
+        player.setBeatGrid(beats: stride(from: 0.0, to: 4, by: 0.5).map { $0 }, bars: [0, 2])
+        #expect(player.hasBeatGrid)
+        player.setMetronomeEnabled(true)
+        player.setCountInEnabled(true)
+        #expect(player.metronomeEnabled && player.countInEnabled)
+
+        player.play()
+        guard player.isPlaying else { return } // no audio device in this environment
+        try await Task.sleep(for: .milliseconds(400))
+        // One bar of 4 beats at 0.5 s = 2 s of count-in: the song has not started yet.
+        if let remaining = player.countInBeatsRemaining {
+            #expect((1...4).contains(remaining))
+            #expect(player.currentTime < 0.05)
+        }
+        player.pause()
+        #expect(player.currentTime < 0.05)
+
+        // Losing the grid turns the metronome off.
+        player.setBeatGrid(beats: [], bars: [])
+        #expect(!player.metronomeEnabled && !player.countInEnabled)
+    }
 }

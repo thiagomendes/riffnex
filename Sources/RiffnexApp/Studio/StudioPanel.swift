@@ -29,6 +29,18 @@ struct StudioPanel: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 200)
                 Spacer()
+                if player.hasBeatGrid {
+                    Toggle(isOn: Binding(get: { player.metronomeEnabled }, set: { player.setMetronomeEnabled($0) })) {
+                        Image(systemName: "metronome")
+                    }
+                    .toggleStyle(.button)
+                    .accessibilityLabel("Metrônomo")
+                    Toggle(isOn: Binding(get: { player.countInEnabled }, set: { player.setCountInEnabled($0) })) {
+                        Text("1·2·3·4").font(.caption2.weight(.bold))
+                    }
+                    .toggleStyle(.button)
+                    .accessibilityLabel("Contagem antes de tocar")
+                }
                 Toggle(isOn: $leftHanded) {
                     Image(systemName: "hand.raised")
                 }
@@ -39,7 +51,15 @@ struct StudioPanel: View {
             TimelineView(.animation(paused: !player.isPlaying)) { _ in
                 let time = player.currentTime
                 VStack(spacing: RX.Space.s) {
-                    CurrentChordView(analysis: analysis, time: time)
+                    if let beats = player.countInBeatsRemaining {
+                        Text("\(beats)")
+                            .font(.rxDisplay(.largeTitle))
+                            .foregroundStyle(RX.brandGradient)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel("Contagem: \(beats)")
+                    } else {
+                        CurrentChordView(analysis: analysis, time: time)
+                    }
                     if let layout = app.analysis.layouts[song.id] {
                         if mode == Mode.tab.rawValue {
                             TabStripView(layout: layout, time: time) { player.seek(to: $0) }
@@ -65,5 +85,15 @@ struct StudioPanel: View {
                 .font(.caption2).foregroundStyle(RX.Palette.textTertiary)
         }
         .task(id: analysis.createdAt) { await app.analysis.prepareLayout(for: song.id) }
+        .task(id: GridKey(analysis: analysis.createdAt, loaded: player.isLoaded)) {
+            // The player resets its grid on load, so (re)apply it whenever either side changes.
+            guard player.isLoaded else { return }
+            player.setBeatGrid(beats: analysis.rhythm?.beats ?? [], bars: analysis.rhythm?.bars ?? [])
+        }
     }
+}
+
+private struct GridKey: Equatable {
+    let analysis: Date
+    let loaded: Bool
 }
