@@ -39,7 +39,7 @@ struct PlayerView: View {
                 }
                 timeline
                 transport
-                loopRow
+                if !compact { loopRow } // once analyzed, the section chips handle looping
                 Spacer(minLength: 0)
                 practiceFooter
             }
