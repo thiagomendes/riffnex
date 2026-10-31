@@ -54,6 +54,8 @@ public struct NotePostProcessor: Sendable {
         public var refinedOnsets = 0
         public var merged = 0
         public var kept = 0
+
+        public init() {}
     }
 
     public var parameters: Parameters

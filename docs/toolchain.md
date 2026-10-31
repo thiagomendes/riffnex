@@ -74,9 +74,21 @@ O código é compilado e testado automaticamente no GitHub Actions a cada push. 
 cd ~
 git clone https://github.com/thiagomendes/riffnex.git
 cd riffnex
-git checkout claude/m0-foundation
+git checkout claude/m2-analysis
 xtool dev
 ```
+
+Se o repositório já estiver clonado (por exemplo, do M0):
+
+```bash
+cd ~/riffnex
+git fetch origin
+git checkout claude/m2-analysis
+git pull
+xtool dev
+```
+
+A branch `claude/m2-analysis` contém o M1 (biblioteca e player) e o M2 (análise).
 
 **Modo de Desenvolvedor:** a opção só aparece no iPhone **depois** da primeira tentativa de instalação com `xtool dev`. Em seguida:
 1. Ajustes › Privacidade e Segurança › role até o final (seção “Segurança”) › **Modo de Desenvolvedor** › ativar.
@@ -86,6 +98,8 @@ xtool dev
 Na primeira instalação, o iOS também pode bloquear o app. Para liberar: Ajustes › Geral › **VPN e Gerenciamento de Dispositivo** › seu Apple ID › **Confiar**.
 
 Para atualizar depois: `git pull && xtool dev`.
+
+> **Antes de cada sessão de instalação**, se você removeu a regra de firewall ou o `portproxy` (passo 7), recrie os dois no PowerShell como administrador e exporte `USBMUXD_SOCKET_ADDRESS` de novo no WSL. Para conferir: `netsh interface portproxy show all` deve listar a porta 27015.
 
 > **Conta gratuita:** o perfil de assinatura expira em **7 dias**. Depois disso o app para de abrir, e basta rodar `xtool dev` de novo.
 

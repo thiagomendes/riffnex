@@ -2,7 +2,7 @@
 
 **Da escuta ao toque. (From listening to playing.)** RIFFNEX is an iPhone app that turns songs you own into an interactive guitar lesson. It analyzes the audio on-device, then shows notes, chords and recommended fingering on a fretboard, all synced to the recording.
 
-> **Status: M1 (library, import and playback).** You can import your own audio files (with validation, DRM detection and duplicate detection), browse a library with generated covers, and practice with a player that has precise seeking, pitch-preserving speed (25–125%), gapless A–B looping on a draggable waveform, and lock-screen controls. There is a first-run onboarding. Note and chord analysis starts in M2. M0 diagnostics live under the gear icon.
+> **Status: M2 (analysis v1).** On top of M1 (import, library, practice player with speed and A–B loop), every song can now be analyzed **on the iPhone**. Notes come from Spotify's Basic Pitch (with a Swift port of its note decoding that matches the reference exactly) plus guitar-specific clean-up. Chords are estimated beat by beat. Tempo, key and section boundaries come from Apple's Music Understanding. Each song also gets an honest quality report. The player shows the current chord and section, and the Song Overview explains where each fact came from. Measured results on the demo are in [`docs/quality/m2-demo-baseline.md`](docs/quality/m2-demo-baseline.md). The fretboard and tab arrive in M3.
 
 ## Documents
 
@@ -30,6 +30,7 @@ See **[`docs/toolchain.md`](docs/toolchain.md)** for step-by-step instructions (
 
 - `python3 tools/make_icon.py` regenerates `App/AppIcon.png` (needs numpy and Pillow).
 - `python3 tools/fixtures/make_demo.py` regenerates the demo song and its ground truth (needs numpy and ffmpeg).
+- `python tools/fixtures/make_golden.py` regenerates the Basic Pitch golden vectors in `Tests/Fixtures` from the reference implementation (setup in the script header; no TensorFlow needed).
 
 ## Licenses
 

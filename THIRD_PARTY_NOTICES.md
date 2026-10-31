@@ -5,6 +5,8 @@
 `Sources/AnalysisEngine/Resources/BasicPitch/nmp.mlpackage` is the Core ML model shipped by Spotify in
 `basic-pitch` 0.4.0 (`basic_pitch/saved_models/icassp_2022/nmp.mlpackage`), redistributed unmodified.
 
+`Sources/MusicCore/Transcription/NoteDecoder.swift` is a Swift port (derivative work) of `basic_pitch/note_creation.py` (`output_to_notes_polyphonic`, `get_infered_onsets`, `constrain_frequency`) from the same release, under the same Apache-2.0 license; the file states this. Golden vectors in `Tests/Fixtures` are outputs of the reference implementation on RIFFNEX's own demo song.
+
 - License: Apache License 2.0. The full text and NOTICE are in `Sources/AnalysisEngine/Resources/BasicPitch/LICENSE.txt` and `NOTICE.txt`.
 - Paper: Bittner et al., “A Lightweight Instrument-Agnostic Model for Polyphonic Note Transcription and Multipitch Estimation”, ICASSP 2022.
 - Upstream: https://github.com/spotify/basic-pitch
