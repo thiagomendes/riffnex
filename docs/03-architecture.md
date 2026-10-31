@@ -259,6 +259,8 @@ Everything else is Apple frameworks: SwiftUI, SwiftData, Observation, AVFoundati
 
 ## 10. Privacy, legal & App Store
 
+> Current distribution: **personal device only** (no App Store). Store-specific items below are kept for future reference but are not MVP work.
+
 - **Audio stays on device**, and the MVP has no network calls for analysis. The privacy nutrition label is “Data Not Collected”.
 - **Rights:** there is a reminder at import. The app offers no sharing or export of transcriptions or audio in the MVP, which reduces exposure under guideline 5.2. There are no streaming-service integrations; Spotify and Apple Music audio cannot legally or technically be extracted.
 - **Microphone** (post-MVP): requested just in time, after an explainer. Practice audio is processed in memory and **not recorded** unless the user explicitly saves a take.

@@ -31,6 +31,7 @@ The MVP is one end-to-end vertical slice. It is complete when a user can do all 
 | iPad-specific layout, Mac, watchOS | Later |
 | Streaming integrations (Spotify, Apple Music) | Not planned. Licensing does not allow it. |
 | Accounts, cloud sync, sharing or exporting tabs, social features, gamification, streaks | Later, with a rights review for sharing |
+| App Store / TestFlight distribution, privacy manifest, store metadata | Not planned for now (personal use on the owner's iPhone) |
 | Any accuracy or “mastery” percentage not backed by measurement | Never |
 
 ## 3. Milestones
@@ -69,11 +70,11 @@ Each milestone ends with a build on Xcode 27, a green test suite, and a short de
 - Metronome and count-in. Studio state persistence.
 - **Exit:** the full MVP journey works on device with the demo song and with user files. 120 Hz is held on a ProMotion device and 60 Hz on the oldest supported device, measured with Instruments.
 
-### M4 · MVP hardening → TestFlight
+### M4 · MVP hardening → personal device build
 - Accessibility pass (VoiceOver rotor, Dynamic Type at AX sizes, Increase Contrast, Differentiate Without Color).
-- Complete the pt-BR copy review, privacy manifest, licenses screen, App Store metadata draft.
+- Complete the pt-BR copy review and the licenses screen. (Privacy manifest and App Store metadata are deferred: distribution target is the owner's iPhone only — see §5.)
 - Performance and memory pass, plus edge cases (very short or long files, silence, mono or stereo, odd sample rates, files without a clear beat).
-- **Exit:** TestFlight build, with a known-limitations list published in the README.
+- **Exit:** Release-configuration build installed on the owner's iPhone via Xcode, with a known-limitations list published in the README.
 
 ### Post-MVP
 - **M5 · Practice v1:** microphone permission flow, headphones-first, latency calibration, tuner, monophonic note-hit feedback (pYIN) with explicit “couldn't hear clearly” states, and a Practice Summary with real measurements only.
@@ -88,4 +89,13 @@ Each milestone ends with a build on Xcode 27, a green test suite, and a short de
 - **D1:** iOS 27 minimum (recommended) or iOS 18 plus a custom DSP fallback.
 - **D2:** A Mac with Xcode 27 and/or GitHub Actions macOS CI. This container is Linux and cannot build iOS.
 - **D3:** An original demo riff to bundle.
-- **D4:** Bundle ID, team and display name.
+- **D4:** ~~Bundle ID, team and display name~~ → Resolved: personal use only; bundle ID `com.thiagomendes.riffnex` signed with the owner's Personal Team (or paid account if available).
+
+## 5. Distribution: personal device only
+
+Decision (2026-10-31): RIFFNEX runs only on the owner's iPhone for now; no App Store or TestFlight.
+
+- Install path: Xcode on a Mac → connect iPhone → Run (Developer Mode enabled on the iPhone).
+- With a **free Apple ID (Personal Team)** the provisioning profile expires after **7 days** and the app must be re-run from Xcode; a paid Apple Developer Program membership extends this to 1 year. All capabilities the MVP needs (background audio, file import, Core ML, Music Understanding) work under personal signing **[to verify: `BGContinuedProcessingTask` entitlement under a Personal Team]**.
+- The minimum iOS version (D1) is now simply **the iOS version of the owner's iPhone**: if it runs iOS 27, adopt Music Understanding; otherwise use the custom DSP fallback.
+- Privacy, rights and honesty rules still apply unchanged — they are product principles, not store requirements. Store-specific work (privacy manifest, nutrition label, review guidelines) is deferred until distribution is reconsidered.
