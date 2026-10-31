@@ -69,7 +69,7 @@ public struct FingeringCostModel: Sendable, Equatable {
     /// Highest hand position (index-finger fret) at which open strings still earn their bonus.
     public var openFriendlyMaxHand: Int = 4
     /// Extra cost per open string when the hand is above `openFriendlyMaxHand`.
-    public var highOpenPenalty: Double = 0.4
+    public var highOpenPenalty: Double = 1.0
     /// Candidates kept per group after static scoring.
     public var maxCandidates: Int = 48
 
