@@ -126,7 +126,7 @@ public actor BasicPitchModel {
         let clock = ContinuousClock()
         let start = clock.now
         let provider = try MLDictionaryFeatureProvider(dictionary: [Constants.inputName: MLFeatureValue(multiArray: input)])
-        let output = try model.prediction(from: provider)
+        let output = try Self.predictSynchronously(model, provider)
         let elapsed = (clock.now - start).seconds
 
         func array(_ name: String) throws -> MLMultiArray {
@@ -143,6 +143,16 @@ public actor BasicPitchModel {
         return WindowOutput(noteShape: notes.shape.map(\.intValue), onsetShape: onsets.shape.map(\.intValue),
                             contourShape: contours.shape.map(\.intValue), maxNoteActivation: maxActivation,
                             seconds: elapsed)
+    }
+}
+
+extension BasicPitchModel {
+    /// In an async context the compiler picks MLModel's async `prediction` overload, which would send
+    /// the non-Sendable model off the actor. A synchronous helper keeps inference on the actor's thread.
+    private nonisolated static func predictSynchronously(
+        _ model: MLModel, _ provider: any MLFeatureProvider
+    ) throws -> any MLFeatureProvider {
+        try model.prediction(from: provider)
     }
 }
 
