@@ -19,6 +19,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: swift --version
       - name: Test pure-Swift core
+        env:
+          RIFFNEX_CORE_ONLY: "1"
         run: swift test --parallel
 
   ios:

@@ -23,7 +23,7 @@ See **[`docs/toolchain.md`](docs/toolchain.md)** for step-by-step instructions (
 
 ### Tests
 
-- `swift test`: MusicCore tests. Runs on macOS, and on Linux with Swift 6.x.
+- `swift test`: MusicCore tests. On Linux, run `RIFFNEX_CORE_ONLY=1 swift test`, which drops the iOS-only targets.
 - CI (`.github/workflows/ci.yml`) runs a Linux job for MusicCore and an `xcode-27` macOS job that builds the app for iOS and runs the package tests on the iOS simulator.
 
 ### Regenerating assets

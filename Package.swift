@@ -4,7 +4,9 @@
 // xtool turns the single library product below into the iOS app.
 //
 // Targets are split so the pure-Swift core (MusicCore) also builds and tests on Linux.
-// Apple-only targets are excluded from the manifest on non-Apple hosts.
+// Set RIFFNEX_CORE_ONLY=1 to drop the Apple-only targets (used by the Linux CI job).
+// This must NOT depend on the host OS: xtool evaluates this manifest on Linux/WSL while
+// cross-compiling the iOS app.
 
 import PackageDescription
 
@@ -26,37 +28,39 @@ var targets: [Target] = [
 
 var products: [Product] = []
 
-#if !os(Linux) && !os(Windows)
-targets += [
-    .target(
-        name: "DesignSystem",
-        dependencies: ["MusicCore"],
-        swiftSettings: swiftSettings
-    ),
-    .target(
-        name: "AnalysisEngine",
-        dependencies: ["MusicCore"],
-        resources: [
-            // Spotify Basic Pitch (Apache-2.0). Copied verbatim; compiled on device at first use
-            // because model compilation (coremlc) is only available inside Xcode.
-            .copy("Resources/BasicPitch"),
-        ],
-        swiftSettings: swiftSettings
-    ),
-    .target(
-        name: "RiffnexApp",
-        dependencies: ["MusicCore", "DesignSystem", "AnalysisEngine"],
-        resources: [
-            .process("Resources"),
-        ],
-        swiftSettings: swiftSettings
-    ),
-]
-// xtool: "An xtool project should contain exactly one library product, representing the main app."
-products = [
-    .library(name: "RiffnexApp", targets: ["RiffnexApp"]),
-]
-#endif
+let coreOnly = Context.environment["RIFFNEX_CORE_ONLY"] == "1"
+
+if !coreOnly {
+    targets += [
+        .target(
+            name: "DesignSystem",
+            dependencies: ["MusicCore"],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "AnalysisEngine",
+            dependencies: ["MusicCore"],
+            resources: [
+                // Spotify Basic Pitch (Apache-2.0). Copied verbatim; compiled on device at first use
+                // because model compilation (coremlc) is only available inside Xcode.
+                .copy("Resources/BasicPitch"),
+            ],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "RiffnexApp",
+            dependencies: ["MusicCore", "DesignSystem", "AnalysisEngine"],
+            resources: [
+                .process("Resources"),
+            ],
+            swiftSettings: swiftSettings
+        ),
+    ]
+    // xtool: "An xtool project should contain exactly one library product, representing the main app."
+    products = [
+        .library(name: "RiffnexApp", targets: ["RiffnexApp"]),
+    ]
+}
 
 let package = Package(
     name: "Riffnex",
