@@ -247,6 +247,8 @@ Weights live in one `FingeringCostModel` struct with documented defaults and are
 - **Clock:** `PlaybackClock.currentTime` is derived from `playerNode.lastRenderTime` → `playerTime(forNodeTime:)`, plus the segment start offset, mapped to song seconds. It compensates for `outputLatency` so visuals match what the ear hears. UI reads the clock **per frame** in `TimelineView`. It is not pushed through Observation at 60–120 Hz.
 - **Session:** `.playback` category (`.playAndRecord` once Practice ships). Handles interruptions (pauses and offers to resume), route changes (pauses when headphones are unplugged), and media services reset (rebuilds the graph). `MPNowPlayingInfoCenter` and remote commands are supported. Background audio mode is enabled so practice continues with the screen locked.
 
+> **Found in M0 CI (Xcode 27.1 / iOS 27.1 SDK):** `AVAudioEngine.connect(_:to:format:)` and `AVAudioPlayerNode.play()` are **deprecated in iOS 27.0**. They still work, but M1 must look up the replacement API in the iOS 27 SDK before building the PlaybackEngine on them.
+
 ## 7. Persistence
 
 | Data | Store | Why |
