@@ -58,7 +58,6 @@ O código é compilado e testado automaticamente no GitHub Actions a cada push. 
    ```
    Desbloqueie o iPhone e toque em **Confiar** quando ele perguntar. No Ubuntu, `xtool devices` deve listar o seu iPhone. Se aparecer `AFCClient.Error.muxError`, consulte a seção de solução de problemas da documentação do xtool.
 
-8. **Modo de Desenvolvedor no iPhone:** Ajustes › Privacidade e Segurança › **Modo de Desenvolvedor** › ativar. O iPhone reinicia.
 
 ## Compilar e instalar
 
@@ -70,7 +69,12 @@ git checkout claude/m0-foundation
 xtool dev
 ```
 
-Na primeira instalação, o iOS pode bloquear o app. Para liberar: Ajustes › Geral › **VPN e Gerenciamento de Dispositivo** › seu Apple ID › **Confiar**.
+**Modo de Desenvolvedor:** a opção só aparece no iPhone **depois** da primeira tentativa de instalação com `xtool dev`. Em seguida:
+1. Ajustes › Privacidade e Segurança › role até o final (seção “Segurança”) › **Modo de Desenvolvedor** › ativar.
+2. O iPhone reinicia. Depois, confirme **Ativar** no alerta e digite o código do aparelho.
+3. Rode `xtool dev` de novo, se for preciso.
+
+Na primeira instalação, o iOS também pode bloquear o app. Para liberar: Ajustes › Geral › **VPN e Gerenciamento de Dispositivo** › seu Apple ID › **Confiar**.
 
 Para atualizar depois: `git pull && xtool dev`.
 
