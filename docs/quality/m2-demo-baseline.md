@@ -42,6 +42,29 @@ are mostly repeated notes whose onset the model did not mark.
 - Sections (Music Understanding boundaries + RIFFNEX letters): `A` (riff), `B` (chords), `Final`.
 - Quality report: `good`, no reasons. 23% of notes are low confidence.
 
+## Core ML vs reference (iOS simulator, CI)
+
+- The bundled `nmp.mlpackage` run through RIFFNEX's own windowing (AVAudioConverter decode, CPU) vs
+  the reference ONNX model run on ffmpeg-decoded audio: mean absolute difference of the note
+  activations is **0.0016** over 1 849 frames. The largest single difference is 0.79 and is isolated;
+  it comes from the decoders differing at transients.
+- The note F1 after the full on-device pipeline is **0.76**, the same as with the reference
+  activations.
+- Music Understanding works in the iOS 27.1 simulator: **96 BPM, Em**.
+- Stage timings in the simulator (CPU only, CI Mac) for the 21.5 s demo:
+  - decode 0.01 s
+  - notes 4.0 s
+  - Music Understanding 12.8 s, run in parallel with the notes
+  - assembly 0.7 s
+
+## M3 fingering (canonical cases, Linux CI)
+
+- Demo riff: **49/51** recommended positions equal the positions the riff was written with.
+- F barre chord: 1-3-3-2-1-1 with fingers index, ring, ring, middle, index, index (barre detected).
+- G5–A5–C5: 6th- and 5th-string power-chord shapes (G5 = s0f3, C5 = s1f3).
+- Two-octave E minor pentatonic: a single box with at most two hand shifts, and no open strings mixed
+  in above the 4th position.
+
 ## Not yet measured
 
 - **GuitarSet baseline**: planned for the M2 exit and not done yet. The dataset (CC BY 4.0, about 3 GB)
