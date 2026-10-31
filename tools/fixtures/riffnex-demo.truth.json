@@ -449,9 +449,9 @@
     {
       "onset": 17.5,
       "offset": 19.875,
-      "midi": 61,
+      "midi": 62,
       "string": 4,
-      "fret": 2
+      "fret": 3
     }
   ],
   "notesAudioCaveat": "Fret positions are as composed; any playable equivalent is acceptable."

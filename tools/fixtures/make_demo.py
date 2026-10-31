@@ -92,7 +92,12 @@ riff_bar_b = [
 ]
 
 def power(root_string, fret):
-    return [(root_string, fret), (root_string + 1, fret + 2), (root_string + 2, fret + 2)]
+    """Root, fifth and octave. Strings above the G string sit a major third (not a fourth)
+    higher, so a shape that reaches the B string needs one extra fret there."""
+    def shift(string):
+        return 3 if string == 4 else 2
+    return [(root_string, fret), (root_string + 1, fret + shift(root_string + 1)),
+            (root_string + 2, fret + shift(root_string + 2))]
 
 chord_bars = [
     [(0.0, 2.0, power(0, 0), "E5"), (2.0, 2.0, power(0, 3), "G5")],
