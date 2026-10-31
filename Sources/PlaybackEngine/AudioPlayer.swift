@@ -56,8 +56,9 @@ public final class AudioPlayer {
         let format = file.processingFormat
         engine.disconnectNodeOutput(player)
         engine.disconnectNodeOutput(timePitch)
-        engine.connect(player, to: timePitch, format: format)
-        engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+        // iOS 27 replaced the non-throwing connect/play with throwing variants that report failures.
+        try engine.connectNode(player, to: timePitch, format: format)
+        try engine.connectNode(timePitch, to: engine.mainMixerNode, format: format)
         engine.prepare()
 
         self.file = file
@@ -111,7 +112,7 @@ public final class AudioPlayer {
             pausedFrame = frame(for: loop.start)
         }
         schedule(from: pausedFrame)
-        player.play()
+        guard startNode() else { return }
         isPlaying = true
         playStartedAt = ContinuousClock.now
         updateNowPlaying()
@@ -135,7 +136,7 @@ public final class AudioPlayer {
         let target = frame(for: seconds)
         if isPlaying {
             schedule(from: target)
-            player.play()
+            if !startNode() { isPlaying = false }
         } else {
             pausedFrame = target
         }
@@ -214,7 +215,20 @@ public final class AudioPlayer {
         guard isPlaying else { return }
         let position = currentFrame(compensated: false)
         schedule(from: position)
-        player.play()
+        if !startNode() { isPlaying = false }
+    }
+
+    /// Starts the player node; on failure records the error and leaves playback stopped.
+    private func startNode() -> Bool {
+        do {
+            try player.playAudio()
+            return true
+        } catch {
+            haltPlayer()
+            lastError = "Não foi possível tocar: \(error.localizedDescription)"
+            log.error("playAudio failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
 
     private func schedule(from frame: Int64) {

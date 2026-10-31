@@ -37,13 +37,6 @@ jobs:
           swift --version
           xcrun simctl list runtimes
 
-      - name: SDK notes (AVAudioEngine iOS 27 deprecations)
-        continue-on-error: true
-        run: |
-          H="$(xcrun --sdk iphoneos --show-sdk-path)/System/Library/Frameworks/AVFAudio.framework/Headers"
-          grep -n -B3 -A3 "27.0" "$H/AVAudioEngine.h" "$H/AVAudioPlayerNode.h" "$H/AVAudioNode.h" | head -150 || true
-          ls "$H"
-
       - name: List schemes
         run: xcodebuild -list
 

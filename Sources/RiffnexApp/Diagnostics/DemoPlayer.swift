@@ -28,13 +28,13 @@ final class DemoPlayer {
         try session.setActive(true)
 
         let file = try AVAudioFile(forReading: url)
-        engine.connect(player, to: engine.mainMixerNode, format: file.processingFormat)
+        try engine.connectNode(player, to: engine.mainMixerNode, format: file.processingFormat)
         player.stop()
         player.scheduleFile(file, at: nil) { [weak self] in
             Task { @MainActor in self?.isPlaying = false }
         }
         if !engine.isRunning { try engine.start() }
-        player.play()
+        try player.playAudio()
         isPlaying = true
 
         let port = session.currentRoute.outputs.first?.portName ?? "—"
