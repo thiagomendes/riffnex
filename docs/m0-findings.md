@@ -44,3 +44,8 @@
 2. **Instrument gating:** use `other` activity (and the absence of `vocal`/`bass` dominance) only as a *weak* signal. The architecture doc's “if guitar is supported” branch resolves to: guitar is not a class.
 3. **Analysis UX:** if full songs also run slower than real time, the Analysis screen must show the Music Understanding stage as long-running and indeterminate. Basic Pitch can run in parallel. Background continuation becomes important.
 4. Section labels (A/B/A′) still come from our own chord-sequence similarity, because the framework gives unlabeled ranges.
+
+## M1 notes
+
+- iOS 27 deprecates the non-throwing `AVAudioEngine.connect(_:to:format:)` and `AVAudioPlayerNode.play()` in favor of the throwing `connectNode(_:to:format:)` and `playAudio()`. RIFFNEX uses the new APIs, so engine failures surface as errors instead of failing silently.
+- `AVAudioSession.InterruptionType` is deprecated in iOS 27 in favor of `AVAudioSessionDidBecomeInactiveNotification` and `AVAudioSessionResumptionRecommendationNotification`. The interruption notification still works, and the player still uses it, which produces a build warning. The migration is tracked for M3, when the PlaybackEngine is extended for the Studio.

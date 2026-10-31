@@ -2,7 +2,7 @@
 
 **Da escuta ao toque. (From listening to playing.)** RIFFNEX is an iPhone app that turns songs you own into an interactive guitar lesson. It analyzes the audio on-device, then shows notes, chords and recommended fingering on a fretboard, all synced to the recording.
 
-> **Status: M0 (foundation).** The project scaffold, the MusicCore domain with tests, the design tokens, and an on-device **Diagnostics** screen that exercises every risky capability (Core ML, Music Understanding, audio decode and playback, localization, logs). Song import starts in M1.
+> **Status: M1 (library, import and playback).** You can import your own audio files (with validation, DRM detection and duplicate detection), browse a library with generated covers, and practice with a player that has precise seeking, pitch-preserving speed (25–125%), gapless A–B looping on a draggable waveform, and lock-screen controls. There is a first-run onboarding. Note and chord analysis starts in M2. M0 diagnostics live under the gear icon.
 
 ## Documents
 
@@ -23,7 +23,7 @@ See **[`docs/toolchain.md`](docs/toolchain.md)** for step-by-step instructions (
 
 ### Tests
 
-- `swift test`: MusicCore tests. On Linux, run `RIFFNEX_CORE_ONLY=1 swift test`, which drops the iOS-only targets.
+- `swift test`: MusicCore and Persistence tests. On Linux, run `RIFFNEX_CORE_ONLY=1 swift test`, which drops the iOS-only targets.
 - CI (`.github/workflows/ci.yml`) runs a Linux job for MusicCore and an `xcode-27` macOS job that builds the app for iOS and runs the package tests on the iOS simulator.
 
 ### Regenerating assets
