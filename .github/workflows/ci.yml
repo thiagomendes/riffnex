@@ -73,6 +73,12 @@ jobs:
             -scheme Riffnex \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -skipMacroValidation -skipPackagePluginValidation \
-            > test.log 2>&1 || { tail -n 200 test.log; exit 1; }
+            > test.log 2>&1 || {
+              echo "::group::Failures and measurements"
+              grep -nE "✘|recorded an issue|error:|Fatal error|crashed|^\[[a-z ]+[^]]*\]" test.log | head -150
+              echo "::endgroup::"
+              tail -n 60 test.log
+              exit 1
+            }
           # Show the per-test outcomes and the summary, so a green run proves tests actually ran.
           grep -E "✔ Test|✘|Test run with|Executed [0-9]+ test|^\[[a-z ]+[^]]*\]" test.log || { echo "No test summary found"; tail -n 80 test.log; exit 1; }
