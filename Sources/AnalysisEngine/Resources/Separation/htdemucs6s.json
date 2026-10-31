@@ -1,0 +1,19 @@
+{
+ "model": "htdemucs_6s",
+ "license": "MIT (Demucs, Meta AI)",
+ "sources": [
+  "drums",
+  "bass",
+  "other",
+  "vocals",
+  "guitar",
+  "piano"
+ ],
+ "sampleRate": 44100,
+ "channels": 2,
+ "segmentSamples": 343980,
+ "nfft": 4096,
+ "hop": 1024,
+ "frames": 336,
+ "overlap": 0.25
+}
