@@ -42,7 +42,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build \
-            -scheme RiffnexApp \
+            -scheme Riffnex \
             -destination 'generic/platform=iOS' \
             -skipMacroValidation -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
@@ -68,7 +68,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test \
-            -scheme Riffnex-Package \
+            -scheme Riffnex \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -skipMacroValidation -skipPackagePluginValidation \
             -quiet
