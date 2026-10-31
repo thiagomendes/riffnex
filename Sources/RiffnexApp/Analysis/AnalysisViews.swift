@@ -364,8 +364,8 @@ struct SongOverviewView: View {
                 Label(AnalysisText.reason(reason), systemImage: "info.circle")
                     .font(.subheadline).foregroundStyle(RX.Palette.textSecondary)
             }
-            ForEach(analysis.stageErrors.sorted(by: { $0.key < $1.key }), id: \.key) { stage, message in
-                Label("\(AnalysisText.stageError(stage)): \(message)", systemImage: "exclamationmark.triangle")
+            ForEach(analysis.stageErrors.sorted(by: { $0.key < $1.key }), id: \.key) { entry in
+                Label("\(AnalysisText.stageError(entry.key)): \(entry.value)", systemImage: "exclamationmark.triangle")
                     .font(.footnote).foregroundStyle(RX.Palette.warning)
             }
             let low = Int((analysis.quality.metrics.lowConfidenceFraction * 100).rounded())
