@@ -16,6 +16,9 @@ final class DemucsSpectrogram: @unchecked Sendable {
     private let window: [Float]
     private let forwardSetup: vDSP_DFT_Setup
     private let inverseSetup: vDSP_DFT_Setup
+    /// Factor that turns vDSP's inverse real DFT of a *true* spectrum into the time signal. vDSP's
+    /// scaling conventions differ between routines, so it is measured once instead of assumed.
+    private let inverseScale: Float
 
     init(nfft: Int = 4096) {
         self.nfft = nfft
@@ -25,6 +28,34 @@ final class DemucsSpectrogram: @unchecked Sendable {
         window = (0..<nfft).map { 0.5 - 0.5 * cos(2 * Float.pi * Float($0) / Float(nfft)) }
         forwardSetup = vDSP_DFT_zrop_CreateSetup(nil, vDSP_Length(nfft), .FORWARD)!
         inverseSetup = vDSP_DFT_zrop_CreateSetup(nil, vDSP_Length(nfft), .INVERSE)!
+        inverseScale = Self.calibrate(forward: forwardSetup, inverse: inverseSetup, n: nfft)
+    }
+
+    /// Runs forward then inverse on a known signal. The forward output is 2·DFT (verified against
+    /// torch in the tests), so feeding the inverse a true spectrum X gives (roundTrip / 2)·x;
+    /// the returned factor maps that back to x.
+    private static func calibrate(forward: vDSP_DFT_Setup, inverse: vDSP_DFT_Setup, n: Int) -> Float {
+        let half = n / 2
+        let signal = (0..<n).map { i -> Float in
+            let t = Float(i)
+            return sin(t * 0.013) + 0.5 * cos(t * 0.37 + 1) + 0.25 * sin(t * 1.9)
+        }
+        let even = (0..<half).map { signal[2 * $0] }
+        let odd = (0..<half).map { signal[2 * $0 + 1] }
+        var fr = [Float](repeating: 0, count: half)
+        var fi = [Float](repeating: 0, count: half)
+        vDSP_DFT_Execute(forward, even, odd, &fr, &fi)
+        var be = [Float](repeating: 0, count: half)
+        var bo = [Float](repeating: 0, count: half)
+        vDSP_DFT_Execute(inverse, fr, fi, &be, &bo)
+        var dot: Float = 0
+        var norm: Float = 0
+        for k in 0..<half {
+            dot += be[k] * even[k] + bo[k] * odd[k]
+            norm += even[k] * even[k] + odd[k] * odd[k]
+        }
+        let roundTrip = dot / max(norm, 1e-12) // 2N for vDSP's documented real-DFT conventions
+        return 2 / roundTrip
     }
 
     deinit {
@@ -88,8 +119,8 @@ final class DemucsSpectrogram: @unchecked Sendable {
         var inI = [Float](repeating: 0, count: half)
         var outEven = [Float](repeating: 0, count: half)
         var outOdd = [Float](repeating: 0, count: half)
-        // istft(normalized=True) multiplies by √nfft; vDSP inverse is an unnormalized sum, so ÷nfft.
-        let scale = sqrt(Float(nfft)) / Float(nfft)
+        // istft(normalized=True) multiplies the spectrum by √nfft before the inverse DFT.
+        let scale = sqrt(Float(nfft)) * inverseScale
         let squared = window.map { $0 * $0 }
 
         for frame in 0..<(frames + 4) {
