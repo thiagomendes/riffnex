@@ -1,0 +1,4 @@
+/* Development language is pt-BR. Keys are stable identifiers; English (en.lproj) comes in M8. */
+"diagnostics.localization.probe" = "Localização OK";
+"home.tagline.1" = "Da escuta";
+"home.tagline.2" = "ao toque.";

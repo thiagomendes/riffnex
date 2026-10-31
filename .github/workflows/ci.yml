@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-linux:
+    name: MusicCore tests (Linux)
+    runs-on: ubuntu-24.04
+    container: swift:6.2-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - name: Test pure-Swift core
+        run: swift test --parallel
+
+  ios:
+    name: iOS build + tests (Xcode 27)
+    # Image announced in actions/runner-images#14404 (macOS 27 + Xcode 27).
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun simctl list runtimes
+
+      - name: List schemes
+        run: xcodebuild -list
+
+      - name: Build app (iOS device, unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -scheme RiffnexApp \
+            -destination 'generic/platform=iOS' \
+            -skipMacroValidation -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+
+      - name: Pick iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          ios = [d for runtime, ds in sorted(devices.items()) if "iOS" in runtime for d in ds if d["name"].startswith("iPhone")]
+          print(ios[-1]["udid"] if ios else "")
+          ')
+          if [ -z "$UDID" ]; then
+            RUNTIME=$(xcrun simctl list runtimes --json | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["platform"]=="iOS" and x["isAvailable"]]; print(r[-1]["identifier"])')
+            UDID=$(xcrun simctl create "CI iPhone" "com.apple.CoreSimulator.SimDeviceType.iPhone-16" "$RUNTIME")
+          fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices | grep "$UDID"
+
+      - name: Test (iOS simulator)
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme Riffnex-Package \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -skipMacroValidation -skipPackagePluginValidation \
+            -quiet

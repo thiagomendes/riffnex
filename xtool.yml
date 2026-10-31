@@ -1,0 +1,8 @@
+# xtool project configuration — see https://github.com/xtool-org/xtool
+# Schema (PackLib/PackSchema.swift): version, bundleID|orgID, product, infoPath,
+# entitlementsPath, iconPath (.png), resources, extensions, skipLSP.
+version: 1
+bundleID: com.thiagomendes.riffnex
+product: RiffnexApp
+infoPath: App/Info.plist
+iconPath: App/AppIcon.png

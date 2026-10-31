@@ -1,0 +1,14 @@
+.DS_Store
+/.build
+/.swiftpm
+/Packages
+/*.xcodeproj
+xcuserdata/
+DerivedData/
+/xtool
+*.ipa
+.sourcekit-lsp/
+__pycache__/
+*.pyc
+tools/**/.venv/
+tools/fixtures/out/
