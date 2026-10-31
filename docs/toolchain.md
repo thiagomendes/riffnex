@@ -54,8 +54,10 @@ O código é compilado e testado automaticamente no GitHub Actions a cada push. 
    2. No PowerShell **como administrador**, uma vez só:
       ```powershell
       New-NetFirewallRule -DisplayName "WSL" -Direction Inbound -InterfaceAlias "vEthernet (WSL (Hyper-V firewall))" -Action Allow
-      $myhost = $(wsl -- ip route list default | awk '{print $3}')
+      $myhost = (Get-NetIPAddress -InterfaceAlias "vEthernet (WSL (Hyper-V firewall))" -AddressFamily IPv4).IPAddress
+      $myhost   # deve mostrar algo como 172.x.x.x
       netsh interface portproxy set v4tov4 listenport=27015 connectaddress=127.0.0.1 connectport=27015 listenaddress=$myhost
+      netsh interface portproxy show all
       ```
       Se você já tinha usado usbipd, devolva o iPhone ao Windows antes: `usbipd detach --busid <BUSID>` e `usbipd unbind --busid <BUSID>`.
    3. No Ubuntu (a variável vale para cada terminal novo; dá para colocar no `~/.bashrc`):
