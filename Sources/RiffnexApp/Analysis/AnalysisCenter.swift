@@ -34,6 +34,8 @@ final class AnalysisCenter {
     private(set) var current: Job?
     private(set) var queue: [UUID] = []
     private(set) var failures: [UUID: String] = [:]
+    /// Fingering + tab layout per analyzed song, computed off the main actor on first use.
+    private(set) var layouts: [UUID: TabLayout] = [:]
     private var known: Set<UUID> = []
 
     @ObservationIgnored private let store: LibraryStore
@@ -78,8 +80,20 @@ final class AnalysisCenter {
         if current?.songID == id { task?.cancel() }
     }
 
+    func prepareLayout(for id: UUID) async {
+        guard layouts[id] == nil, let analysis = analyses[id] else { return }
+        let layout = await Task.detached(priority: .userInitiated) {
+            let arrangement = FingeringOptimizer().arrange(notes: analysis.notes,
+                                                           phraseBoundaries: analysis.sections.map(\.start))
+            return TabLayout(arrangement: arrangement, rhythm: analysis.rhythm, duration: analysis.duration)
+        }.value
+        // The analysis may have been replaced meanwhile.
+        if analyses[id] == analysis { layouts[id] = layout }
+    }
+
     func forget(_ id: UUID) {
         cancel(id)
+        layouts[id] = nil
         analyses[id] = nil
         failures[id] = nil
         known.remove(id)
@@ -129,6 +143,7 @@ final class AnalysisCenter {
         switch result {
         case .success(let analysis):
             analyses[id] = analysis
+            layouts[id] = nil
             known.insert(id)
             log.info("Analysis saved for \(id, privacy: .public)")
         case .failure(let error) where error is CancellationError:

@@ -18,6 +18,8 @@ struct PlayerView: View {
     @State private var showingSpeed = false
 
     private var player: AudioPlayer { app.player }
+    /// Once the Studio panel is showing, the header and waveform shrink to make room for it.
+    private var compact: Bool { app.analysis.analyses[song.id] != nil }
 
     var body: some View {
         ZStack {
@@ -27,14 +29,7 @@ struct PlayerView: View {
                 AnalysisCard(song: song)
                 Spacer(minLength: 0)
                 if let analysis = app.analysis.analyses[song.id] {
-                    TimelineView(.animation(paused: !player.isPlaying)) { _ in
-                        let time = player.currentTime
-                        VStack(spacing: RX.Space.xs) {
-                            CurrentChordView(analysis: analysis, time: time)
-                            SectionStrip(sections: analysis.sections, duration: analysis.duration, highlightTime: time)
-                                .frame(height: 16)
-                        }
-                    }
+                    StudioPanel(song: song, analysis: analysis)
                 }
                 if let loadError {
                     Text(loadError)
@@ -72,7 +67,7 @@ struct PlayerView: View {
         HStack(spacing: RX.Space.m) {
             SongArtwork(imageURL: app.artworkURL(for: song), waveform: app.waveforms[song.id], seed: song.id,
                         cornerRadius: RX.Radius.control)
-                .frame(width: 88, height: 88)
+                .frame(width: compact ? 52 : 88, height: compact ? 52 : 88)
                 .shadow(color: RX.Palette.violet.opacity(0.35), radius: 18, y: 6)
             VStack(alignment: .leading, spacing: RX.Space.xxs) {
                 Text(song.title)
@@ -105,7 +100,7 @@ struct PlayerView: View {
                             ?? player.loop)
                     }
                 )
-                .frame(height: 120)
+                .frame(height: compact ? 72 : 120)
                 .accessibilityElement()
                 .accessibilityLabel("Linha do tempo")
                 .accessibilityValue("\(TimeFormatting.clock(time)) de \(TimeFormatting.clock(duration))")
