@@ -17,6 +17,7 @@ struct StudioPanel: View {
     @Environment(AppModel.self) private var app
     @AppStorage("rx.studioMode") private var mode = Mode.neck.rawValue
     @AppStorage("rx.leftHanded") private var leftHanded = false
+    @State private var inspected: [ArrangedNote]?
 
     private var player: AudioPlayer { app.player }
 
@@ -67,6 +68,10 @@ struct StudioPanel: View {
                         } else {
                             FretboardView(layout: layout, time: time, leftHanded: leftHanded)
                                 .frame(height: 170)
+                                .contentShape(Rectangle())
+                                .onTapGesture { inspect(layout) }
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityHint("Pausa e mostra detalhes das notas")
                         }
                     } else {
                         ProgressView("Calculando digitação…")
@@ -84,12 +89,28 @@ struct StudioPanel: View {
             Text("Posições e dedos são uma sugestão tocável, não necessariamente como foi gravado.")
                 .font(.caption2).foregroundStyle(RX.Palette.textTertiary)
         }
+        .sheet(isPresented: Binding(get: { inspected != nil }, set: { if !$0 { inspected = nil } })) {
+            if let notes = inspected, let layout = app.analysis.layouts[song.id] {
+                NoteInfoSheet(notes: notes, tuning: layout.arrangement.tuning)
+                    .presentationDetents([.medium, .large])
+            }
+        }
         .task(id: analysis.createdAt) { await app.analysis.prepareLayout(for: song.id) }
         .task(id: GridKey(analysis: analysis.createdAt, loaded: player.isLoaded)) {
             // The player resets its grid on load, so (re)apply it whenever either side changes.
             guard player.isLoaded else { return }
             player.setBeatGrid(beats: analysis.rhythm?.beats ?? [], bars: analysis.rhythm?.bars ?? [])
         }
+    }
+}
+
+extension StudioPanel {
+    fileprivate func inspect(_ layout: TabLayout) {
+        let time = player.currentTime
+        player.pause()
+        // If nothing is sounding exactly now, show the notes that start next.
+        let sounding = layout.sounding(at: time)
+        inspected = sounding.isEmpty ? layout.upcoming(after: time, horizon: 2) : sounding
     }
 }
 

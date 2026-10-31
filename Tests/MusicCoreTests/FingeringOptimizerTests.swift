@@ -72,6 +72,8 @@ struct FingeringOptimizerTests {
         let frets = arrangement.notes.map(\.position.fret)
         // Either the open box or the 12th-fret box, not a mix of both ends of the neck.
         #expect((frets.max() ?? 0) - (frets.filter { $0 > 0 }.min() ?? 0) <= 5)
+        // No open strings mixed into a box played up the neck.
+        if let lowestHand = hands.min(), lowestHand > 4 { #expect(!frets.contains(0)) }
     }
 
     @Test func demoRiffMatchesHowItWasWritten() throws {

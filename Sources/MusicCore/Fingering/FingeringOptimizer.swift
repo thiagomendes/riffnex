@@ -66,6 +66,10 @@ public struct FingeringCostModel: Sendable, Equatable {
     public var stringCrossWeight: Double = 0.15
     /// Prefer the index finger on the lowest fretted note (hand position at the lowest fret).
     public var handOffsetWeight: Double = 0.12
+    /// Highest hand position (index-finger fret) at which open strings still earn their bonus.
+    public var openFriendlyMaxHand: Int = 4
+    /// Extra cost per open string when the hand is above `openFriendlyMaxHand`.
+    public var highOpenPenalty: Double = 0.4
     /// Candidates kept per group after static scoring.
     public var maxCandidates: Int = 48
 
@@ -215,6 +219,12 @@ public struct FingeringOptimizer: Sendable {
         let kept = scored.prefix(cost.maxCandidates)
 
         var result: [State] = []
+        // Open strings are easy only near the nut; with the hand high up the neck they force awkward
+        // jumps in attention, so their bonus turns into a cost there.
+        func openCost(_ positions: [FretPosition], hand: Int) -> Double {
+            let opens = positions.filter { $0.fret == 0 }.count
+            return hand > cost.openFriendlyMaxHand ? Double(opens) * (cost.openStringBonus + cost.highOpenPenalty) : 0
+        }
         for candidate in kept {
             let frets = candidate.positions.map(\.fret).filter { $0 > 0 }
             let meanString = Double(candidate.positions.map(\.string).reduce(0, +)) / Double(max(candidate.positions.count, 1))
@@ -222,14 +232,15 @@ public struct FingeringOptimizer: Sendable {
                 // The hand (index finger) can sit anywhere that keeps every fretted note under fingers 1–4.
                 let lowest = min(lo, max(1, hi - 3)) // a 5-fret stretch keeps the index at the lowest fret
                 for hand in lowest...lo {
-                    let offset = Double(lo - hand) * cost.handOffsetWeight
+                    let offset = Double(lo - hand) * cost.handOffsetWeight + openCost(candidate.positions, hand: hand)
                     result.append(State(positions: candidate.positions, hand: hand, staticCost: candidate.cost + offset,
                                         meanString: meanString, fretted: true))
                 }
             } else {
                 // All open: the hand is free; offer the common positions so it can stay where it is.
                 for hand in [1, 2, 3, 5, 7, 9, 12] {
-                    result.append(State(positions: candidate.positions, hand: hand, staticCost: candidate.cost,
+                    result.append(State(positions: candidate.positions, hand: hand,
+                                        staticCost: candidate.cost + openCost(candidate.positions, hand: hand),
                                         meanString: meanString, fretted: false))
                 }
             }
