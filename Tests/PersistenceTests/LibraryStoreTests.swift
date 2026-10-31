@@ -128,4 +128,32 @@ struct LibraryStoreTests {
             try await LibraryStore(rootURL: root).load()
         }
     }
+
+    @Test func analysisRoundTripAndSchemaGuard() async throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = LibraryStore(rootURL: root)
+        let song = makeSong()
+        try await store.add(song)
+        #expect(await store.analysis(for: song.id) == nil)
+
+        let quality = QualityReport.assess(duration: 10, notes: [], chords: [], rhythm: nil, keys: [], activity: nil)
+        let analysis = SongAnalysis(createdAt: Date(timeIntervalSince1970: 1_800_000_000), duration: 10, rhythm: nil,
+                                    keys: [], sections: [], notes: [], chords: [], activity: nil, quality: quality,
+                                    noteReport: .init(), timings: [StageTiming(stage: "notes", seconds: 1.5)],
+                                    components: [], stageErrors: ["musicUnderstanding": "indisponível"])
+        try await store.save(analysis, for: song.id)
+        #expect(await store.hasAnalysis(for: song.id))
+        #expect(await store.analysis(for: song.id) == analysis)
+
+        // A file from another schema version is not shown.
+        var future = analysis
+        future.schemaVersion = 99
+        try await store.save(future, for: song.id)
+        #expect(await store.analysis(for: song.id) == nil)
+
+        try await store.removeAnalysis(for: song.id)
+        #expect(await store.hasAnalysis(for: song.id) == false)
+        await #expect(throws: LibraryError.self) { try await store.save(analysis, for: UUID()) }
+    }
 }

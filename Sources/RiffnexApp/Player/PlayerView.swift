@@ -4,8 +4,9 @@ import Persistence
 import PlaybackEngine
 import SwiftUI
 
-/// M1 practice player: precise seek, pitch-preserving speed, gapless A–B loop and a waveform timeline.
-/// It becomes the transport of the Learning Studio in M3.
+/// Practice player: precise seek, pitch-preserving speed, gapless A–B loop and a waveform timeline,
+/// plus the analysis card and (once analyzed) the current chord and section. It becomes the
+/// transport of the Learning Studio in M3.
 struct PlayerView: View {
     let song: SongRecord
 
@@ -21,9 +22,20 @@ struct PlayerView: View {
     var body: some View {
         ZStack {
             RXBackground()
-            VStack(spacing: RX.Space.l) {
+            VStack(spacing: RX.Space.m) {
                 header
+                AnalysisCard(song: song)
                 Spacer(minLength: 0)
+                if let analysis = app.analysis.analyses[song.id] {
+                    TimelineView(.animation(paused: !player.isPlaying)) { _ in
+                        let time = player.currentTime
+                        VStack(spacing: RX.Space.xs) {
+                            CurrentChordView(analysis: analysis, time: time)
+                            SectionStrip(sections: analysis.sections, duration: analysis.duration, highlightTime: time)
+                                .frame(height: 16)
+                        }
+                    }
+                }
                 if let loadError {
                     Text(loadError)
                         .font(.footnote)

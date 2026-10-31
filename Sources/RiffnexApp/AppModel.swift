@@ -25,6 +25,7 @@ final class AppModel {
 
     let player = AudioPlayer()
     let store: LibraryStore
+    let analysis: AnalysisCenter
 
     @ObservationIgnored private var importTask: Task<Void, Never>?
     private let log = Logger(subsystem: RXLog.subsystem, category: "library")
@@ -34,6 +35,7 @@ final class AppModel {
                                                  appropriateFor: nil, create: true))
             ?? FileManager.default.temporaryDirectory
         store = LibraryStore(rootURL: base.appendingPathComponent("Library", isDirectory: true))
+        analysis = AnalysisCenter(store: store)
     }
 
     /// The most recently opened song, for "Continuar praticando".
@@ -134,6 +136,7 @@ final class AppModel {
 
     func delete(_ song: SongRecord) async {
         do {
+            analysis.forget(song.id)
             try await store.remove(song.id)
             waveforms[song.id] = nil
             await refresh()

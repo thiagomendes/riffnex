@@ -113,6 +113,10 @@ public actor LibraryStore {
         folder(for: id).appendingPathComponent("artwork.jpg")
     }
 
+    public nonisolated func analysisURL(for id: UUID) -> URL {
+        folder(for: id).appendingPathComponent("analysis.json")
+    }
+
     private nonisolated func stateURL(for id: UUID) -> URL {
         folder(for: id).appendingPathComponent("state.json")
     }
@@ -198,6 +202,30 @@ public actor LibraryStore {
 
     public func save(_ waveform: WaveformOverview, for id: UUID) throws {
         try write(waveform, to: waveformURL(for: id))
+    }
+
+    /// The stored analysis, or `nil` if there is none or it was written with a different schema
+    /// (the caller then offers to analyze again — we never show results we cannot read faithfully).
+    public func analysis(for id: UUID) -> SongAnalysis? {
+        guard let data = try? Data(contentsOf: analysisURL(for: id)),
+              let analysis = try? Self.decoder.decode(SongAnalysis.self, from: data),
+              analysis.schemaVersion == SongAnalysis.currentSchemaVersion else { return nil }
+        return analysis
+    }
+
+    public func hasAnalysis(for id: UUID) -> Bool {
+        FileManager.default.fileExists(atPath: analysisURL(for: id).path)
+    }
+
+    /// Written atomically, so a cancelled or crashed analysis never leaves a partial file.
+    public func save(_ analysis: SongAnalysis, for id: UUID) throws {
+        guard song(id) != nil else { throw LibraryError.unknownSong(id) }
+        try write(analysis, to: analysisURL(for: id))
+    }
+
+    public func removeAnalysis(for id: UUID) throws {
+        let url = analysisURL(for: id)
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
     }
 
     // MARK: Private

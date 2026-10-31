@@ -33,6 +33,7 @@ struct DiagnosticsView: View {
                         }
                     }
 
+                    BenchmarkSection()
                     importSection
                     if let json = model.musicUnderstandingJSON { jsonSection(json) }
                     logSection

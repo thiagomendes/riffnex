@@ -34,17 +34,20 @@ public actor BasicPitchModel {
     public enum ModelError: Error, LocalizedError {
         case missingResource
         case missingOutput(String)
+        case notCompiled
 
         public var errorDescription: String? {
             switch self {
             case .missingResource: "O modelo Basic Pitch não foi encontrado no pacote do app."
             case .missingOutput(let name): "O modelo não produziu a saída esperada: \(name)."
+            case .notCompiled: "O modelo ainda não foi preparado neste aparelho."
             }
         }
     }
 
     private static let log = Logger(subsystem: RXLog.subsystem, category: "basic-pitch")
     private var model: MLModel?
+    private var loadedUnits: MLComputeUnits?
 
     public init() {}
 
@@ -89,12 +92,17 @@ public actor BasicPitchModel {
             compiled = true
         }
 
+        if model != nil, loadedUnits == computeUnits, !compiled {
+            return LoadReport(compiledThisLaunch: false, compileSeconds: nil, loadSeconds: 0,
+                              inputShape: [1, Constants.windowSamples, 1])
+        }
         let start = clock.now
         let configuration = MLModelConfiguration()
         configuration.computeUnits = computeUnits
         // Synchronous load inside the actor: MLModel is not Sendable, so it never leaves this actor.
         let loaded = try MLModel(contentsOf: destination, configuration: configuration)
         model = loaded
+        loadedUnits = computeUnits
         let shape = loaded.modelDescription.inputDescriptionsByName[Constants.inputName]?
             .multiArrayConstraint?.shape.map(\.intValue) ?? []
         let report = LoadReport(compiledThisLaunch: compiled, compileSeconds: compileSeconds,
@@ -158,6 +166,88 @@ public actor BasicPitchModel {
         return WindowOutput(noteShape: shape, onsetShape: onsets.shape.map(\.intValue),
                             contourShape: contours.shape.map(\.intValue), maxNoteActivation: maxActivation,
                             strongestMIDI: Constants.lowestMIDI + strongestBin, seconds: elapsed)
+    }
+}
+
+extension BasicPitchModel {
+    /// The note and onset activations of one window, frames × 88, row-major.
+    public struct WindowActivations: Sendable {
+        public let frames: Int
+        public let notes: [Float]
+        public let onsets: [Float]
+        public let seconds: Double
+    }
+
+    /// Runs one window and returns its full note/onset activations.
+    public func activations(for samples: [Float], computeUnits: MLComputeUnits = .all) throws -> WindowActivations {
+        precondition(samples.count == Constants.windowSamples, "Window must be \(Constants.windowSamples) samples")
+        if model == nil || loadedUnits != computeUnits { try loadSynchronously(computeUnits: computeUnits) }
+        guard let model else { throw ModelError.missingResource }
+        let input = try MLMultiArray(shape: [1, NSNumber(value: Constants.windowSamples), 1], dataType: .float32)
+        samples.withUnsafeBufferPointer { source in
+            input.dataPointer.bindMemory(to: Float.self, capacity: samples.count)
+                .update(from: source.baseAddress!, count: samples.count)
+        }
+        let clock = ContinuousClock()
+        let start = clock.now
+        let provider = try MLDictionaryFeatureProvider(dictionary: [Constants.inputName: MLFeatureValue(multiArray: input)])
+        let output = try Self.predictSynchronously(model, provider)
+        let elapsed = (clock.now - start).seconds
+        guard let notes = output.featureValue(for: Constants.noteOutput)?.multiArrayValue else {
+            throw ModelError.missingOutput(Constants.noteOutput)
+        }
+        guard let onsets = output.featureValue(for: Constants.onsetOutput)?.multiArrayValue else {
+            throw ModelError.missingOutput(Constants.onsetOutput)
+        }
+        let (frames, noteValues) = try Self.matrix(notes)
+        let (_, onsetValues) = try Self.matrix(onsets)
+        return WindowActivations(frames: frames, notes: noteValues, onsets: onsetValues, seconds: elapsed)
+    }
+
+    /// Copies a [1, frames, bins] (or [frames, bins]) multi-array into a dense row-major Float array,
+    /// honoring strides. Fast paths for float32/float16 storage; generic subscript otherwise.
+    static func matrix(_ array: MLMultiArray) throws -> (frames: Int, values: [Float]) {
+        let shape = array.shape.map(\.intValue)
+        let strides = array.strides.map(\.intValue)
+        guard shape.count >= 2 else { throw ModelError.missingOutput("shape \(shape)") }
+        let frames = shape[shape.count - 2]
+        let bins = shape[shape.count - 1]
+        let frameStride = strides[strides.count - 2]
+        let binStride = strides[strides.count - 1]
+        var values = [Float](repeating: 0, count: frames * bins)
+        switch array.dataType {
+        case .float32:
+            array.withUnsafeBufferPointer(ofType: Float.self) { buffer in
+                for t in 0..<frames {
+                    for f in 0..<bins { values[t * bins + f] = buffer[t * frameStride + f * binStride] }
+                }
+            }
+        #if arch(arm64)
+        case .float16:
+            array.withUnsafeBufferPointer(ofType: Float16.self) { buffer in
+                for t in 0..<frames {
+                    for f in 0..<bins { values[t * bins + f] = Float(buffer[t * frameStride + f * binStride]) }
+                }
+            }
+        #endif
+        default:
+            let leading = Array(repeating: NSNumber(value: 0), count: shape.count - 2)
+            for t in 0..<frames {
+                for f in 0..<bins {
+                    values[t * bins + f] = array[leading + [NSNumber(value: t), NSNumber(value: f)]].floatValue
+                }
+            }
+        }
+        return (frames, values)
+    }
+
+    private func loadSynchronously(computeUnits: MLComputeUnits) throws {
+        let destination = try Self.compiledModelURL()
+        guard FileManager.default.fileExists(atPath: destination.path) else { throw ModelError.notCompiled }
+        let configuration = MLModelConfiguration()
+        configuration.computeUnits = computeUnits
+        model = try MLModel(contentsOf: destination, configuration: configuration)
+        loadedUnits = computeUnits
     }
 }
 

@@ -19,11 +19,13 @@ public struct SongAnalysis: Codable, Sendable, Equatable {
     public var noteReport: NotePostProcessor.Report
     public var timings: [StageTiming]
     public var components: [AnalysisSource]
+    /// Non-fatal failures of individual stages (stage name → message), shown in the Overview.
+    public var stageErrors: [String: String]
 
     public init(schemaVersion: Int = SongAnalysis.currentSchemaVersion, createdAt: Date = Date(), duration: Seconds,
                 rhythm: RhythmGrid?, keys: [KeySpan], sections: [SongSection], notes: [NoteEvent],
                 chords: [ChordEvent], activity: InstrumentActivity?, quality: QualityReport,
-                noteReport: NotePostProcessor.Report, timings: [StageTiming], components: [AnalysisSource]) {
+                noteReport: NotePostProcessor.Report, timings: [StageTiming], components: [AnalysisSource], stageErrors: [String: String] = [:]) {
         self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.duration = duration
@@ -37,6 +39,7 @@ public struct SongAnalysis: Codable, Sendable, Equatable {
         self.noteReport = noteReport
         self.timings = timings
         self.components = components
+        self.stageErrors = stageErrors
     }
 
     /// The key that covers most of the song, if any.
