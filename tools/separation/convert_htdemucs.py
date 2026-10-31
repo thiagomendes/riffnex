@@ -106,24 +106,18 @@ def main():
         core = Core(model).eval()
         traced = torch.jit.trace(core, (mix, mag), check_trace=False)
 
-    mlmodel = ct.convert(
-        traced,
-        inputs=[ct.TensorType(name="mix", shape=tuple(mix.shape)), ct.TensorType(name="mag", shape=tuple(mag.shape))],
-        outputs=[ct.TensorType(name="time"), ct.TensorType(name="spec")],
-        convert_to="mlprogram",
-        compute_precision=ct.precision.FLOAT16,
-        minimum_deployment_target=ct.target.iOS17,
-    )
-    mlmodel.author = "Meta AI (Demucs v4 htdemucs_6s, MIT); converted for RIFFNEX"
-    mlmodel.short_description = "HTDemucs 6-source core (STFT/iSTFT done by the app)"
-    OUT_MODEL.parent.mkdir(parents=True, exist_ok=True)
-    if OUT_MODEL.exists():
-        subprocess.run(["rm", "-rf", str(OUT_MODEL)], check=True)
-    mlmodel.save(str(OUT_MODEL))
+    def convert(precision):
+        return ct.convert(
+            traced,
+            inputs=[ct.TensorType(name="mix", shape=tuple(mix.shape)), ct.TensorType(name="mag", shape=tuple(mag.shape))],
+            outputs=[ct.TensorType(name="time"), ct.TensorType(name="spec")],
+            convert_to="mlprogram",
+            compute_precision=precision,
+            minimum_deployment_target=ct.target.iOS17,
+        )
 
-    # Validate: Core ML core + PyTorch iSTFT vs the full PyTorch model.
-    for units in (ct.ComputeUnit.CPU_ONLY, ct.ComputeUnit.ALL):
-        loaded = ct.models.MLModel(str(OUT_MODEL), compute_units=units)
+    def evaluate(mlmodel_path, units, label):
+        loaded = ct.models.MLModel(str(mlmodel_path), compute_units=units)
         start = time.time()
         out = loaded.predict({"mix": mix.numpy(), "mag": mag.numpy()})
         elapsed = time.time() - start
@@ -132,12 +126,33 @@ def main():
         B, S, C, Fr, T = spec.shape
         zout = torch.view_as_complex(spec.view(B, S, -1, 2, Fr, T).permute(0, 1, 2, 4, 5, 3).contiguous())
         estimate = tb + model._ispec(zout, seg)
-        errors = {}
+        mix_norm = torch.linalg.norm(mix[0]).item()
+        relative, to_mix = {}, {}
         for i, name in enumerate(sources):
-            num = torch.linalg.norm(estimate[0, i] - reference[0, i]).item()
-            den = torch.linalg.norm(reference[0, i]).item() + 1e-9
-            errors[name] = round(num / den, 4)
-        print(f"[{units}] predict {elapsed:.2f}s; relative error per source: {errors}")
+            diff = torch.linalg.norm(estimate[0, i] - reference[0, i]).item()
+            relative[name] = round(diff / (torch.linalg.norm(reference[0, i]).item() + 1e-9), 4)
+            to_mix[name] = round(diff / mix_norm, 4)
+        energy = {name: round(torch.linalg.norm(reference[0, i]).item() / mix_norm, 3) for i, name in enumerate(sources)}
+        print(f"[{label} {units}] predict {elapsed:.2f}s")
+        print(f"  source energy / mix: {energy}")
+        print(f"  error / source:      {relative}")
+        print(f"  error / mix:         {to_mix}")
+        return to_mix
+
+    OUT_MODEL.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        fp32_path = pathlib.Path(tmp) / "fp32.mlpackage"
+        convert(ct.precision.FLOAT32).save(str(fp32_path))
+        evaluate(fp32_path, ct.ComputeUnit.CPU_ONLY, "fp32")
+
+    mlmodel = convert(ct.precision.FLOAT16)
+    mlmodel.author = "Meta AI (Demucs v4 htdemucs_6s, MIT); converted for RIFFNEX"
+    mlmodel.short_description = "HTDemucs 6-source core (STFT/iSTFT done by the app)"
+    if OUT_MODEL.exists():
+        subprocess.run(["rm", "-rf", str(OUT_MODEL)], check=True)
+    mlmodel.save(str(OUT_MODEL))
+    for units in (ct.ComputeUnit.CPU_ONLY, ct.ComputeUnit.ALL):
+        evaluate(OUT_MODEL, units, "fp16")
 
     config = {
         "model": "htdemucs_6s",
