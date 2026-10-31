@@ -74,11 +74,11 @@ struct OnboardingView: View {
 
     @ViewBuilder private var visual: some View {
         if reduceMotion {
-            OnboardingVisual(progress: Double(page), animateTime: false)
+            OnboardingVisual(target: Double(page), animateTime: false)
                 .id(page)
                 .transition(.opacity)
         } else {
-            OnboardingVisual(progress: Double(page), animateTime: true)
+            OnboardingVisual(target: Double(page), animateTime: true)
         }
     }
 
@@ -132,16 +132,17 @@ private struct PageDots: View {
     }
 }
 
-/// The morphing scene. `progress` 0 → 1 → 2 maps to wave → notes & chords → fretboard.
-/// SwiftUI interpolates `progress` (Animatable), and a TimelineView adds the living pulse.
-private struct OnboardingVisual: View, Animatable {
-    var progress: Double
+/// The morphing scene. Progress 0 → 1 → 2 maps to wave → notes & chords → fretboard.
+/// Progress is eased by hand inside the TimelineView (no Animatable conformance, which is not
+/// main-actor safe under Swift 6), and the same timeline drives the living pulse.
+private struct OnboardingVisual: View {
+    let target: Double
     let animateTime: Bool
 
-    var animatableData: Double {
-        get { progress }
-        set { progress = newValue }
-    }
+    @State private var from: Double = 0
+    @State private var to: Double = 0
+    @State private var startedAt = Date.distantPast
+    private let transitionDuration = 0.9
 
     private static let count = 18
     // A small original riff: (string from low E = 0, fret) for each note in scene 3.
@@ -155,10 +156,25 @@ private struct OnboardingVisual: View, Animatable {
     var body: some View {
         TimelineView(.animation(paused: !animateTime)) { timeline in
             let time = animateTime ? timeline.date.timeIntervalSinceReferenceDate : 0
+            let progress = animateTime ? progress(at: timeline.date) : target
             Canvas { context, size in
-                draw(in: &context, size: size, time: time)
+                draw(in: &context, size: size, time: time, progress: progress)
             }
         }
+        .onAppear {
+            from = target
+            to = target
+        }
+        .onChange(of: target) { _, newValue in
+            from = progress(at: Date())
+            to = newValue
+            startedAt = Date()
+        }
+    }
+
+    private func progress(at date: Date) -> Double {
+        let k = smooth(date.timeIntervalSince(startedAt) / transitionDuration)
+        return from + (to - from) * k
     }
 
     private func smooth(_ x: Double) -> Double {
@@ -166,7 +182,7 @@ private struct OnboardingVisual: View, Animatable {
         return t * t * (3 - 2 * t)
     }
 
-    private func draw(in context: inout GraphicsContext, size: CGSize, time: Double) {
+    private func draw(in context: inout GraphicsContext, size: CGSize, time: Double, progress: Double) {
         let t1 = smooth(progress)
         let t2 = smooth(progress - 1)
         let w = size.width
