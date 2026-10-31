@@ -63,7 +63,10 @@ public enum AudioDecoder {
             outputBuffer.frameLength = 0
             var conversionError: NSError?
             let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
-                if reachedEnd {
+                // Reading at or past the end throws kAudioFileEndOfFileError (-39) on device,
+                // so stop based on the position instead of waiting for an empty read.
+                if reachedEnd || file.framePosition >= file.length {
+                    reachedEnd = true
                     inputStatus.pointee = .endOfStream
                     return nil
                 }

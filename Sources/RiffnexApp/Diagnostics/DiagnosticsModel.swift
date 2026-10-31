@@ -143,9 +143,9 @@ final class DiagnosticsModel {
                 var window = Array(decoded.samples.prefix(BasicPitchModel.Constants.windowSamples))
                 window += [Float](repeating: 0, count: BasicPitchModel.Constants.windowSamples - window.count)
                 let output = try await model.predictWindow(window)
-                detail += String(format: " Inferência de 1 janela: %.0f ms. Notas %@, onsets %@, contorno %@. Ativação máx. de nota: %.2f.",
+                detail += String(format: " Inferência de 1 janela: %.0f ms. Notas %@, onsets %@, contorno %@. Ativação máx. de nota: %.2f (MIDI %d). A demo começa em E2 = MIDI 40.",
                                  output.seconds * 1000, "\(output.noteShape)", "\(output.onsetShape)",
-                                 "\(output.contourShape)", output.maxNoteActivation)
+                                 "\(output.contourShape)", output.maxNoteActivation, output.strongestMIDI)
             }
             set(.coreML, .passed, detail)
         } catch {

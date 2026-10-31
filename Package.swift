@@ -47,6 +47,11 @@ if !coreOnly {
             ],
             swiftSettings: swiftSettings
         ),
+        .testTarget(
+            name: "AnalysisEngineTests",
+            dependencies: ["AnalysisEngine"],
+            swiftSettings: swiftSettings
+        ),
         .target(
             name: "RiffnexApp",
             dependencies: ["MusicCore", "DesignSystem", "AnalysisEngine"],

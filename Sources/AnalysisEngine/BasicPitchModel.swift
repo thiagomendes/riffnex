@@ -109,6 +109,8 @@ public actor BasicPitchModel {
         public let onsetShape: [Int]
         public let contourShape: [Int]
         public let maxNoteActivation: Float
+        /// MIDI pitch of the strongest note activation in the window (A0 = 21).
+        public let strongestMIDI: Int
         public let seconds: Double
     }
 
@@ -137,12 +139,25 @@ public actor BasicPitchModel {
         let onsets = try array(Constants.onsetOutput)
         let contours = try array(Constants.contourOutput)
 
+        // Index with the shape (not a linear offset) so non-contiguous strides are handled correctly.
+        let shape = notes.shape.map(\.intValue)
         var maxActivation: Float = 0
-        for i in 0..<notes.count { maxActivation = max(maxActivation, notes[i].floatValue) }
+        var strongestBin = 0
+        if shape.count == 3 {
+            for frame in 0..<shape[1] {
+                for bin in 0..<shape[2] {
+                    let value = notes[[0, frame, bin] as [NSNumber]].floatValue
+                    if value > maxActivation {
+                        maxActivation = value
+                        strongestBin = bin
+                    }
+                }
+            }
+        }
 
-        return WindowOutput(noteShape: notes.shape.map(\.intValue), onsetShape: onsets.shape.map(\.intValue),
+        return WindowOutput(noteShape: shape, onsetShape: onsets.shape.map(\.intValue),
                             contourShape: contours.shape.map(\.intValue), maxNoteActivation: maxActivation,
-                            seconds: elapsed)
+                            strongestMIDI: Constants.lowestMIDI + strongestBin, seconds: elapsed)
     }
 }
 
