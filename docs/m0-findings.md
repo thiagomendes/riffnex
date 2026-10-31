@@ -14,8 +14,8 @@
 | `pt-BR.lproj/Localizable.strings` in `Bundle.module` | ✅ |
 | SwiftPM resources (demo m4a in `Riffnex_RiffnexApp.bundle`) | ✅ |
 | AVAudioEngine playback | ✅ |
-| Audio decode | ❌ → fixed. `AVAudioFile.read` throws `kAudioFileEndOfFileError` (-39) when called at EOF. The decoder now checks `framePosition`. Covered by simulator tests. |
-| Basic Pitch on-device compile and inference | ⏳ Blocked by the decode bug; re-check after the fix. |
+| Audio decode | ✅ after the fix. `AVAudioFile.read` threw `kAudioFileEndOfFileError` (-39) when called at EOF; the decoder now checks `framePosition`, and simulator tests cover it. The demo (21.5 s, 44.1 kHz mono AAC) decodes to mono 22 050 Hz in **76 ms**. |
+| Basic Pitch on-device compile and inference | ✅ Compiled on device and cached. Input `[1, 43844, 1]`; outputs notes `[1, 172, 88]`, onsets `[1, 172, 88]`, contour `[1, 172, 264]`. One window took **1 816 ms**, with a maximum note activation of 0.84 at MIDI 45 (A2, a note the demo riff plays in its first 2 s). |
 
 ## Music Understanding on the demo song (ground truth in `tools/fixtures/riffnex-demo.truth.json`)
 
@@ -32,7 +32,11 @@
 - `instrumentActivity.activity` has exactly four classes: **`bass`, `drum`, `vocal`, `other`**. **There is no guitar class**, so guitar falls under `other`. Values come every 0.05 s (2 205 samples at 44.1 kHz). `instrumentActivity.ranges` gives the active spans per class.
 - No confidence values are exposed for tempo, key or structure. This matches the documentation.
 - The JSON also contains undocumented `structurePredictions` (raw tensors: `kinds` [1, 3, 430], `pace` [1, 41, 430], `phrases`/`sections`/`segments` [1, 430], `predictionResolution` 0.05, `detectionThreshold` 0.33). These are not part of the documented API, so **we do not depend on them**.
-- **Performance:** 23.5 s to analyze 21.5 s of audio with `.rhythm`, `.key`, `.structure` and `.instrumentActivity` requested. That is slower than real time on the A15. **This must be measured on a full-length song** before deciding how analysis progress and background execution should work. It may be a first-run cost, or it may be `instrumentActivity`/`structure`.
+- **Performance:** a second run took **14.15 s** for 21.5 s of audio (0.66× real time), so the first run includes a one-time warm-up. The first run took 23.5 s to analyze 21.5 s of audio with `.rhythm`, `.key`, `.structure` and `.instrumentActivity` requested. That is slower than real time on the A15. **This must be measured on a full-length song** before deciding how analysis progress and background execution should work. It may be a first-run cost, or it may be `instrumentActivity`/`structure`.
+
+## Open performance question: Basic Pitch speed
+
+1.8 s for a 2 s window is close to real time. A 4-minute song (about 130 windows) would take about 4 minutes if that holds. That measurement was a **single, first** prediction with `.all` compute units, so it likely includes Core ML's one-time specialization for the device. M2 must benchmark many consecutive windows, compare `.all`, `.cpuAndNeuralEngine` and `.cpuAndGPU`, and try batching windows, before choosing the analysis UX.
 
 ## Consequences for the plan
 
