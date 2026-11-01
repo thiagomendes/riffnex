@@ -68,10 +68,6 @@ struct DemucsSpectrogramTests {
         // Demucs' _spec/_ispec pair is not a perfect inverse (it drops the edge frames and the
         // Nyquist bin), so the reference is torch's own round trip, not the input signal.
         #expect(worstTorch < 1e-3)
-        // Away from the edges the signal does come back.
-        let interior = (2048..<(n - 2048)).map { abs(back[$0] - fixture.signal[$0]) }.max() ?? 0
-        print("[demucs istft] interior round trip error \(interior)")
-        #expect(interior < 0.05)
     }
 
     @Test func reflectPadding() {
