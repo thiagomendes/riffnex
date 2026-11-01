@@ -47,15 +47,14 @@ struct StudioPanel: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 220)
                 Spacer()
-                if !player.stemNames.isEmpty {
-                    Button {
-                        showingMixer = true
-                    } label: {
-                        Label("Instrumentos", systemImage: "slider.vertical.3")
-                            .font(.footnote.weight(.semibold))
-                    }
-                    .accessibilityHint("Aumente ou abaixe cada instrumento")
+                // Always visible, so it can be found even before the song has separated instruments.
+                Button {
+                    showingMixer = true
+                } label: {
+                    Label("Instrumentos", systemImage: "slider.vertical.3")
+                        .font(.footnote.weight(.semibold))
                 }
+                .accessibilityHint("Aumente ou abaixe cada instrumento")
                 moreMenu
             }
             sectionChips
@@ -78,8 +77,13 @@ struct StudioPanel: View {
             speedChips
         }
         .sheet(isPresented: $showingMixer) {
-            StemMixerSheet(player: player)
-                .presentationDetents([.medium, .large])
+            if player.stemNames.isEmpty {
+                NoStemsSheet(song: song, analysis: analysis)
+                    .presentationDetents([.medium])
+            } else {
+                StemMixerSheet(player: player)
+                    .presentationDetents([.medium, .large])
+            }
         }
         .sheet(isPresented: Binding(get: { inspected != nil }, set: { if !$0 { inspected = nil } })) {
             if let notes = inspected, let layout = app.analysis.layouts[song.id] {
@@ -249,4 +253,49 @@ extension StudioPanel {
 private struct GridKey: Equatable {
     let analysis: Date
     let loaded: Bool
+}
+
+/// Shown by "Instrumentos" when the song has no separated tracks yet, with the reason and the fix.
+private struct NoStemsSheet: View {
+    let song: SongRecord
+    let analysis: SongAnalysis
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(AnalysisCenter.separateStemsKey) private var separateStems = true
+
+    private var reason: String {
+        if let failure = analysis.stageErrors["separating"] {
+            return "A separação falhou na última análise: \(failure)"
+        }
+        if !separateStems {
+            return "A separação de instrumentos está desligada (Diagnóstico → Separar instrumentos ao analisar)."
+        }
+        if analysis.stems == nil {
+            return "Esta música foi analisada antes da separação de instrumentos existir no app."
+        }
+        return "Os arquivos dos instrumentos não foram encontrados."
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: RX.Space.m) {
+            Text("Instrumentos").font(.rxDisplay(.title2)).foregroundStyle(RX.Palette.textPrimary)
+            Text("Para abaixar a guitarra, a voz ou outro instrumento, a música precisa ser separada em faixas.")
+                .font(.subheadline).foregroundStyle(RX.Palette.textSecondary)
+            Label(reason, systemImage: "info.circle")
+                .font(.footnote).foregroundStyle(RX.Palette.textSecondary)
+            Button {
+                separateStems = true
+                app.analysis.analyze(song)
+                dismiss()
+            } label: {
+                Label("Separar instrumentos agora", systemImage: "wand.and.stars")
+            }
+            .buttonStyle(RXPrimaryButtonStyle())
+            Text("Isso refaz a análise desta música. Pode levar alguns minutos; acompanhe no cartão de análise.")
+                .font(.caption).foregroundStyle(RX.Palette.textTertiary)
+            Spacer(minLength: 0)
+        }
+        .padding(RX.Space.screenMargin)
+        .presentationBackground(RX.Palette.surface)
+    }
 }
