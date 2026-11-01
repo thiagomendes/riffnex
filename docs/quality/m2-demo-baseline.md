@@ -73,3 +73,27 @@ are mostly repeated notes whose onset the model did not mark.
 - **On-device timing for a 3-minute song**: the Diagnostics screen now measures Basic Pitch per
   compute unit, and each analysis stores its stage timings (shown under “Como foi feito”). The first
   numbers come from the owner's iPhone 14 Plus test.
+
+## Instrument separation (Demucs htdemucs_6s on Core ML)
+
+- Conversion check (CI Mac, one 7.8 s segment): the Core ML core plus the reference iSTFT differs from
+  PyTorch by at most 2.9% of the mix energy per source. fp16 and fp32 give the same figures.
+- Swift pipeline vs the PyTorch `apply_model` reference on the full demo, comparing the per-source RMS
+  envelope (0.25 s hops):
+
+  | Source | Correlation | Level ratio |
+  |---|---|---|
+  | drums | 1.000 | 0.98 |
+  | piano | 1.000 | 0.99 |
+  | guitar | 1.000 | 1.00 |
+  | bass | 0.997 | 1.00 |
+  | vocals | 0.992 | 1.00 |
+  | other | 0.61 (almost silent in the demo) | 1.07 |
+
+- Speed in the iOS simulator with the CPU only: 21.5 s of audio in 95 s. The device figure comes from
+  Diagnostics on the owner's iPhone.
+- **Demucs hears the demo's synthesized guitar as piano** (99% of the pitched energy). That is why
+  notes come from guitar + piano + other unless the guitar stem clearly dominates. On the demo, notes
+  detected on the stems are a little worse than on the full mix: two chords come out as Em7/Am7
+  instead of E5. The demo has no vocals, so separation cannot help it. Real songs with vocals are where
+  it should help, and that still has to be measured.

@@ -1,4 +1,4 @@
-# Teste no iPhone: M1 + M2 + M3
+# Teste no iPhone: M1, M2, M3 e instrumentos separados
 
 Roteiro para testar tudo de uma vez no iPhone 14 Plus. A instalação é a mesma do `docs/toolchain.md`.
 
@@ -61,24 +61,31 @@ Se o app não abrir porque o perfil expirou (conta gratuita, 7 dias), basta roda
     - Ele compara as combinações de processadores e escolhe a mais rápida para as próximas análises.
     - Mande um print do resultado.
 
-### M3: braço e tablatura
-11. Depois da análise, aparecem no player:
-    - O seletor **Braço · Tab**
-    - O acorde atual
-    - A faixa de seções
-12. **Braço:**
-    - As notas acendem no tempo certo, com o número do dedo.
-    - As próximas notas aparecem como anéis que vão se preenchendo.
-    - A janela de casas acompanha a mão.
-    - O botão da mão inverte o braço para canhotos.
-13. **Tab:** a tablatura rola com a música, e arrastar nela faz a busca.
-14. **Toque no braço:** a música pausa e aparece a origem da nota (detectada pelo Basic Pitch, posição recomendada) e outras posições possíveis.
-15. **Metrônome:**
-    - O botão do metrônome adiciona clique nas batidas, com acento no primeiro tempo de cada compasso.
-    - O botão **1·2·3·4** faz uma contagem de um compasso antes de começar.
-    - Teste também com a velocidade em 50%: o clique deve acompanhar.
+### Novo: pista, fluxo simples e instrumentos separados
+11. **Primeira análise:** a etapa **Separando instrumentos** é nova e a mais demorada. Na primeira vez o app também prepara o modelo de separação, que tem 74 MB.
+    - Anote o tempo de cada etapa em "Como foi feito".
+    - Se ficar lento demais, dá para desligar em Diagnóstico → "Separar instrumentos ao analisar".
+12. **Pista (padrão):**
+    - As cordas viram pistas, com o Mi grave à **direita**.
+    - As notas descem com o número da casa e chegam na linha na hora de tocar.
+    - A etiqueta azul mostra onde deve ficar a mão.
+    - Tocar na pista pausa e explica a nota.
+13. **Fluxo simples:**
+    - Escolha **Riff** ou **Acordes**.
+    - Toque num trecho (Parte A, B…): ele repete sozinho.
+    - Escolha a velocidade (50/75/100%) e toque.
+    - A contagem 1·2·3·4 vem ligada; desliga em **Mais**.
+14. **Acordes:** aparece o desenho do acorde atual (na mesma orientação da pista), o próximo e uma barra até a troca.
+15. **Instrumentos:**
+    - Com a análise feita, aparece o botão **Instrumentos**.
+    - Abaixe ou silencie cada instrumento enquanto toca.
+    - Teste "Sem guitarra" (para tocar junto) e "Só guitarra".
+    - **Confira se não há eco nem efeito de "phaser"**: as faixas precisam tocar perfeitamente juntas.
+16. **Mais:** troque para Braço ou Tab, ligue o metrônome e confira se ele acompanha a música, inclusive em 50%.
+17. **Diagnóstico → "Medir separação (demo)":** mande um print. Ele estima quanto tempo uma música de 4 minutos leva no seu iPhone.
 
 ## 4. O que me mandar
-- Prints de qualquer erro, da Visão geral de uma música sua e do teste de velocidade.
+- Prints de qualquer erro, da Visão geral de uma música sua (qualidade e tempos) e dos dois testes de velocidade do Diagnóstico.
+- Se a separação melhorou as notas e acordes de músicas com voz, comparando com antes.
 - Como ficou o loop (emenda limpa?) e o metrônome (alinhado com a música?).
 - Se algo travar: Diagnóstico → seção de registros → copie e cole o texto.

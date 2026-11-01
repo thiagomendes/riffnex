@@ -12,6 +12,7 @@ struct BenchmarkSection: View {
     @State private var error: String?
     @AppStorage(AnalysisCenter.computeUnitsKey) private var chosen = MLComputeUnits.all.identifier
     @State private var separationReport: String?
+    @AppStorage(AnalysisCenter.separateStemsKey) private var separateStems = true
     @State private var separating = false
 
     var body: some View {
@@ -68,6 +69,11 @@ struct BenchmarkSection: View {
     private var separationBlock: some View {
         VStack(alignment: .leading, spacing: RX.Space.xs) {
             Text("Separação de instrumentos").font(.subheadline.weight(.semibold)).foregroundStyle(RX.Palette.textPrimary)
+            Toggle("Separar instrumentos ao analisar", isOn: $separateStems)
+                .font(.footnote)
+                .tint(RX.Palette.violet)
+            Text("Ligado: as notas são detectadas sem voz, bateria e baixo, e você pode ajustar o volume de cada instrumento ao tocar. A análise fica mais demorada.")
+                .font(.caption).foregroundStyle(RX.Palette.textTertiary)
             Button {
                 Task { await runSeparation() }
             } label: {

@@ -46,6 +46,12 @@ final class AnalysisCenter {
 
     static let computeUnitsKey = "rx.computeUnits"
     nonisolated static let stemsDirectoryName = "Stems"
+    static let separateStemsKey = "rx.separateStems"
+
+    /// Separate instruments before detecting notes (on by default; can be turned off in Diagnostics).
+    var separatesStems: Bool {
+        UserDefaults.standard.object(forKey: Self.separateStemsKey) as? Bool ?? true
+    }
 
     init(store: LibraryStore) {
         self.store = store
@@ -108,6 +114,7 @@ final class AnalysisCenter {
         current = Job(songID: id, stage: .decoding, fraction: 0, detail: nil, startedAt: Date(), stages: [.decoding: 0])
         beginBackgroundTime()
         let units = computeUnits
+        let separate = separatesStems
         task = Task { [weak self, coordinator, store] in
             guard let song = await store.song(id) else {
                 await MainActor.run { self?.finish(id, result: .failure(LibraryError.unknownSong(id))) }
@@ -119,7 +126,7 @@ final class AnalysisCenter {
             let pending = folder.appendingPathComponent("Stems-\(UUID().uuidString)", isDirectory: true)
             do {
                 var analysis = try await coordinator.analyze(fileURL: store.audioURL(for: song),
-                                                             options: .init(computeUnits: units, stemsDirectory: pending)) { update in
+                                                             options: .init(computeUnits: units, stemsDirectory: separate ? pending : nil)) { update in
                     Task { @MainActor in self?.apply(update, for: id) }
                 }
                 try Task.checkCancellation()
