@@ -130,7 +130,7 @@ final class PrepCenter {
         noteProgress[id] = nil
         if let result {
             notes[id] = result
-            log.info("Notes for \(id, privacy: .public): \(result.notes.count) in \(result.seconds, privacy: .public)s")
+            log.info("Notes for \(id, privacy: .public): \(result.detected.count) in \(result.seconds, privacy: .public)s")
         }
         noteTask = nil
         runNotesIfIdle()
