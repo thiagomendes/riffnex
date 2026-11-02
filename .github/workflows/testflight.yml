@@ -66,7 +66,7 @@ jobs:
         run: |
           xcodebuild archive -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/RIFFNEX.xcarchive \
-            CODE_SIGNING_ALLOWED=NO -quiet
+            CODE_SIGNING_ALLOWED=NO SKIP_INSTALL=NO INSTALL_PATH=/Applications -quiet
           echo "::notice::TestFlight secrets are not set yet: built an unsigned archive only."
 
       - name: Archive (signed)
@@ -82,14 +82,17 @@ jobs:
           echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
           xcodebuild archive -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/RIFFNEX.xcarchive \
-            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic SKIP_INSTALL=NO INSTALL_PATH=/Applications \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             -quiet
 
       - name: Add privacy manifest and inspect the app
         run: |
-          APP=$(find build/RIFFNEX.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -1)
+          echo "Archive contents:"
+          find build/RIFFNEX.xcarchive -maxdepth 4 | head -40
+          plutil -p build/RIFFNEX.xcarchive/Info.plist || true
+          APP=$(find build/RIFFNEX.xcarchive/Products -maxdepth 3 -name "*.app" | head -1)
           test -n "$APP"
           # Apple requires the app's privacy manifest at the bundle root; export re-signs the bundle.
           cp App/PrivacyInfo.xcprivacy "$APP/"
