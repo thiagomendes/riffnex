@@ -34,3 +34,11 @@ public enum RXLog {
         return Array(result.suffix(limit))
     }
 }
+
+extension Duration {
+    /// Length in seconds, for timings and logs.
+    var seconds: Double {
+        let (s, attoseconds) = components
+        return Double(s) + Double(attoseconds) / 1e18
+    }
+}
