@@ -18,6 +18,18 @@ final class PrepCenter {
         /// Overall 0…1: separation is ~95% of the work.
         var fraction: Double
         var startedAt: Date
+        /// Memory iOS still allows the app (MB): at the start and now. Diagnostics for crashes.
+        var startMemoryMB: Double = StemSeparator.availableMemoryMB
+        var memoryMB: Double = StemSeparator.availableMemoryMB
+    }
+
+    /// Saved at every step of a preparation and removed when it ends. If the app is killed
+    /// mid-way, the next launch finds it and can say where it stopped and how much memory was left.
+    struct Breadcrumb: Codable {
+        var songID: UUID
+        var percent: Int
+        var startMemoryMB: Int
+        var memoryMB: Int
     }
 
     enum Status: Equatable {
@@ -42,8 +54,15 @@ final class PrepCenter {
 
     nonisolated static let stemsDirectoryName = "Stems"
 
+    static let breadcrumbKey = "rx.prep.breadcrumb"
+
     init(store: LibraryStore) {
         self.store = store
+        if let data = UserDefaults.standard.data(forKey: Self.breadcrumbKey),
+           let crumb = try? JSONDecoder().decode(Breadcrumb.self, from: data) {
+            failures[crumb.songID] = "Na última tentativa o app fechou em \(crumb.percent)%. Memória livre para o app: \(crumb.startMemoryMB) MB no início, \(crumb.memoryMB) MB no fim. Me mande esses números. Toque em Tentar de novo para recomeçar."
+            UserDefaults.standard.removeObject(forKey: Self.breadcrumbKey)
+        }
     }
 
     func status(for id: UUID) -> Status {
@@ -125,10 +144,18 @@ final class PrepCenter {
         job.stage = update.stage
         let part = update.fraction ?? 0
         job.fraction = update.stage == .separating ? 0.95 * part : 0.95 + 0.05 * part
+        job.memoryMB = update.availableMemoryMB
+        let percentChanged = Int(job.fraction * 100) != Int((current?.fraction ?? -1) * 100)
         current = job
+        if percentChanged {
+            let crumb = Breadcrumb(songID: id, percent: Int(job.fraction * 100), startMemoryMB: Int(job.startMemoryMB),
+                                   memoryMB: Int(job.memoryMB))
+            if let data = try? JSONEncoder().encode(crumb) { UserDefaults.standard.set(data, forKey: Self.breadcrumbKey) }
+        }
     }
 
     private func finish(_ id: UUID, result: Result<RiffMap, any Error>) {
+        UserDefaults.standard.removeObject(forKey: Self.breadcrumbKey)
         switch result {
         case .success(let map):
             maps[id] = map

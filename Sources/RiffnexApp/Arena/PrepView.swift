@@ -67,6 +67,9 @@ struct PrepView: View {
                     .font(.subheadline)
                     .foregroundStyle(RX.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: "Memória livre para o app: \(Int(job.memoryMB)) MB (no início: \(Int(job.startMemoryMB)) MB)")
+                    .font(.rxHUD(9, weight: .medium).monospacedDigit())
+                    .foregroundStyle(RX.Palette.textTertiary)
             case .queued:
                 Text("NA FILA")
                     .font(.rxHUD(18, weight: .heavy))

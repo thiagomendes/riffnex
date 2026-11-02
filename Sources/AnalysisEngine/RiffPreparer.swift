@@ -8,7 +8,7 @@ import os
 /// Prepares one song for practice, entirely on the device:
 ///
 /// 1. **Separation** (Demucs `htdemucs_6s`) into six instruments, written as AAC files
-///    (determinate progress: segments done / total). Music Understanding runs alongside it.
+///    (determinate progress: segments done / total). Then Music Understanding (tempo, sections).
 /// 2. **Measurement**: loudness envelopes of the guitar and of the rest of the band, and the
 ///    guitar attacks, measured directly on the separated audio.
 ///
@@ -23,6 +23,8 @@ public actor RiffPreparer {
         public var stage: Stage
         /// 0…1, or `nil` when the stage cannot report real progress.
         public var fraction: Double?
+        /// Memory iOS still allows the app, in MB (diagnostics).
+        public var availableMemoryMB: Double = StemSeparator.availableMemoryMB
     }
 
     public enum PreparationError: Error, LocalizedError {
@@ -53,10 +55,8 @@ public actor RiffPreparer {
                         onUpdate: @escaping @Sendable (Update) -> Void) async throws -> RiffMap {
         guard StemSeparator.isAvailable else { throw PreparationError.modelMissing }
         onUpdate(Update(stage: .separating, fraction: 0))
-        async let understanding = Self.runMusicUnderstanding(fileURL: fileURL)
-
         let separation = try await separator.separate(fileURL: fileURL, into: stemsDirectory, computeUnits: computeUnits) { progress in
-            onUpdate(Update(stage: .separating, fraction: progress.fraction))
+            onUpdate(Update(stage: .separating, fraction: progress.fraction, availableMemoryMB: progress.availableMemoryMB))
         }
         try Task.checkCancellation()
         guard separation.duration > 1 else { throw PreparationError.tooShort }
@@ -83,7 +83,8 @@ public actor RiffPreparer {
         let attacks = RiffMapBuilder.attacks(envelope: RiffMapBuilder.combine(guitarStems.compactMap { fine[$0] }),
                                              rate: Self.attackRate)
 
-        let mu = await understanding
+        // After separation, not alongside it, to keep peak memory low on long songs.
+        let mu = await Self.runMusicUnderstanding(fileURL: fileURL)
         var notes: [String] = []
         if let failure = mu.failure { notes.append("Tempo e compassos indisponíveis: \(failure)") }
         let beats = mu.result?.beats ?? []

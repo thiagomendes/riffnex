@@ -32,6 +32,13 @@ public actor StemSeparator {
         public let fraction: Double
         public let segment: Int
         public let segments: Int
+        /// Memory iOS still allows this app, in MB (diagnostics: if it shrinks every segment, something leaks).
+        public let availableMemoryMB: Double
+    }
+
+    /// Memory iOS still allows this app before terminating it, in MB.
+    public static var availableMemoryMB: Double {
+        Double(os_proc_available_memory()) / 1_048_576
     }
 
     public struct Result: Sendable {
@@ -108,6 +115,16 @@ public actor StemSeparator {
         let start = clock.now
         try await load(computeUnits: computeUnits)
         guard let model, let config else { throw SeparationError.missingModel }
+        return try Self.separate(model: model, config: config, fileURL: fileURL, into: directory, clock: clock,
+                                 start: start, progress: progress)
+    }
+
+    /// The separation itself, outside the actor so each segment can run inside its own autorelease
+    /// pool (Core ML and AVFoundation return autoreleased buffers; without a pool per segment they
+    /// pile up until the song is done, and iOS kills the app on long songs).
+    private nonisolated static func separate(model: MLModel, config: Config, fileURL: URL, into directory: URL,
+                                             clock: ContinuousClock, start: ContinuousClock.Instant,
+                                             progress: @escaping @Sendable (Progress) -> Void) throws -> Result {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         // 1. Decode to 44.1 kHz stereo float in a temporary file we can read at random positions.
@@ -187,6 +204,7 @@ public actor StemSeparator {
         var reconstruction = [Float](repeating: 0, count: segment)
 
         for (index, offset) in offsets.enumerated() {
+          try autoreleasepool {
             try Task.checkCancellation()
             let segmentStart = clock.now
             try flush(upTo: offset)
@@ -239,12 +257,14 @@ public actor StemSeparator {
             for i in 0..<chunkLength { weightSum[base + i] += weight[i] }
 
             segmentTimes.append((clock.now - segmentStart).seconds)
-            progress(Progress(fraction: Double(index + 1) / Double(offsets.count), segment: index + 1, segments: offsets.count))
+            progress(Progress(fraction: Double(index + 1) / Double(offsets.count), segment: index + 1, segments: offsets.count,
+                              availableMemoryMB: Self.availableMemoryMB))
+          }
         }
         try flush(upTo: total)
 
         let seconds = (clock.now - start).seconds
-        Self.log.info("Separated \(Double(total) / config.sampleRate, privacy: .public)s in \(seconds, privacy: .public)s")
+        log.info("Separated \(Double(total) / config.sampleRate, privacy: .public)s in \(seconds, privacy: .public)s")
         return Result(stems: urls, seconds: seconds, segmentSeconds: segmentTimes, duration: Double(total) / config.sampleRate)
     }
 
