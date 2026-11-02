@@ -38,6 +38,7 @@ struct ArenaView: View {
     @State private var toastID = 0
     @State private var clock = FrameClock()
     @AppStorage("rx.showNeck") private var showNeck = true
+    @State private var showingAbout = false
     @Environment(\.dismiss) private var dismiss
 
     init(song: SongRecord, map: RiffMap, app: AppModel) {
@@ -111,6 +112,18 @@ struct ArenaView: View {
                     }
                     .accessibilityLabel(showNeck ? "Esconder o braço com as notas estimadas" : "Mostrar o braço com as notas estimadas")
                     .position(x: 34, y: size.height * 0.66)
+
+                    if showNeck {
+                        Button { showingAbout = true } label: {
+                            Image(systemName: "info")
+                                .font(.footnote.weight(.bold))
+                                .foregroundStyle(RX.Palette.textSecondary)
+                                .frame(width: 44, height: 44)
+                                .background(Circle().fill(RX.Palette.surface.opacity(0.85)).padding(6))
+                        }
+                        .accessibilityLabel("Como as notas são estimadas")
+                        .position(x: 34, y: size.height * 0.66 + 48)
+                    }
                 }
 
                 if let toast {
@@ -125,6 +138,7 @@ struct ArenaView: View {
             }
         }
         .background(RX.Palette.base.ignoresSafeArea())
+        .sheet(isPresented: $showingAbout) { EstimatedNotesSheet() }
         .task { await model.start() }
         .onDisappear { Task { await model.stop() } }
     }
@@ -196,10 +210,21 @@ struct ArenaView: View {
 
     private var controls: some View {
         HStack {
-            TimelineView(.periodic(from: .now, by: 0.25)) { _ in
-                Text("\(TimeFormatting.clock(model.currentTime)) / \(TimeFormatting.clock(model.duration))")
-                    .font(.rxHUD(12, weight: .medium).monospacedDigit())
-                    .foregroundStyle(RX.Palette.textSecondary)
+            HStack(spacing: 6) {
+                Button { model.restart() } label: {
+                    Image(systemName: "backward.end.fill")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(RX.Palette.textPrimary)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(RX.Palette.surface.opacity(0.85)))
+                        .overlay(Circle().strokeBorder(RX.Palette.hairline))
+                }
+                .accessibilityLabel(model.loop == nil ? "Voltar ao início da música" : "Voltar ao início do trecho")
+                TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+                    Text(TimeFormatting.clock(model.currentTime))
+                        .font(.rxHUD(12, weight: .medium).monospacedDigit())
+                        .foregroundStyle(RX.Palette.textSecondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Button { model.togglePlay() } label: {
@@ -458,5 +483,41 @@ struct ArenaButtonStyle: ButtonStyle {
                 }
             }
             .opacity(configuration.isPressed ? 0.75 : 1)
+    }
+}
+
+/// Why the neck is a hint and not a lesson: what the notes come from and when they go wrong.
+struct EstimatedNotesSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: RX.Space.m) {
+                    Text("As notas do braço são estimadas")
+                        .font(.rxHUD(20, weight: .heavy))
+                        .foregroundStyle(RX.Palette.textPrimary)
+                    Text("O RIFFNEX separa a guitarra da música e tenta adivinhar as notas a partir dela, no próprio iPhone. Ninguém transcreveu esta música: o braço, as casas e a animação são uma sugestão.")
+                    Text("Erra mais quando:").font(.headline).foregroundStyle(RX.Palette.textPrimary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("• a guitarra tem muita distorção ou toca acordes;")
+                        Text("• há duas guitarras ou outro instrumento parecido;")
+                        Text("• a gravação tem pouca qualidade;")
+                        Text("• a guitarra está afinada fora do padrão (meio tom abaixo, drop D…): as notas podem estar certas e as casas, não.")
+                    }
+                    Text("Notas vazadas e tracejadas são as que o app tem menos certeza. A casa e o dedo são uma forma confortável de tocar; o guitarrista original pode ter usado outra.")
+                    Text("Na dúvida, confie no ouvido: deixe só a guitarra, diminua a velocidade e prenda o trecho no anel.")
+                        .foregroundStyle(RX.Palette.fireLight)
+                }
+                .font(.subheadline)
+                .foregroundStyle(RX.Palette.textSecondary)
+                .padding(RX.Space.l)
+            }
+            .background(RX.Palette.base.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("OK") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

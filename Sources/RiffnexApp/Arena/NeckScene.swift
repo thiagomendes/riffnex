@@ -59,6 +59,7 @@ enum NeckScene {
         drawTargets(&context, f, visible: visible, pulse: pulse, guitarAlpha: guitarAlpha)
         drawNotes(&context, f, visible: visible, guitarAlpha: guitarAlpha)
         drawHand(&context, f, visible: visible)
+        drawTag(&context, f)
     }
 
     // MARK: Layers
@@ -237,6 +238,7 @@ enum NeckScene {
                     context.draw(Text("\(note.fret)").font(.rxBig(14 * s)).foregroundStyle(Color(hex: 0x14081F).opacity(alpha)),
                                  at: CGPoint(x: center.x, y: center.y + 0.5 * s))
                 }
+                drawLetter(&context, note: note, center: center, ry: ry, scale: s, color: color, alpha: alpha)
             } else {
                 // Unsure: hollow, so you know to trust your ear here.
                 context.stroke(Path(ellipseIn: gem), with: .color(color.opacity(0.7 * alpha)),
@@ -245,8 +247,18 @@ enum NeckScene {
                     context.draw(Text("\(note.fret)").font(.rxHUD(12 * s, weight: .heavy)).foregroundStyle(color.opacity(0.8 * alpha)),
                                  at: center)
                 }
+                drawLetter(&context, note: note, center: center, ry: ry, scale: s, color: color, alpha: alpha * 0.6)
             }
         }
+    }
+
+    /// The note's name (E, G♯…) under the gem, once it is close enough to read.
+    private static func drawLetter(_ context: inout GraphicsContext, note: GuessedNote, center: CGPoint, ry: CGFloat,
+                                   scale: CGFloat, color: Color, alpha: Double) {
+        guard scale > 0.55 else { return }
+        let name = NoteNaming.letters.name(of: MIDINote(unchecked: note.midi).pitchClass)
+        context.draw(Text(name).font(.rxHUD(10 * scale, weight: .heavy)).foregroundStyle(color.opacity(alpha)),
+                     at: CGPoint(x: center.x, y: center.y + ry + 8 * scale))
     }
 
     /// "MÃO NA CASA 5": where the hand should sit for the next notes.
@@ -260,6 +272,12 @@ enum NeckScene {
         context.stroke(Path(roundedRect: CGRect(x: point.x - 62, y: point.y - 11, width: 124, height: 22), cornerRadius: 4),
                        with: .color(RX.Palette.magenta.opacity(0.6)), lineWidth: 1)
         context.draw(text, at: point)
+    }
+
+    /// A quiet reminder at the far end of the neck that all of this is a guess.
+    private static func drawTag(_ context: inout GraphicsContext, _ f: Frame) {
+        context.draw(Text("NOTAS ESTIMADAS").font(.rxHUD(8)).tracking(2).foregroundStyle(RX.Palette.textTertiary),
+                     at: CGPoint(x: f.cx, y: f.horizon - 12))
     }
 
     // MARK: Time

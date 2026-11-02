@@ -104,6 +104,12 @@ final class ArenaModel {
         lastTime = player.currentTime
     }
 
+    /// Back to the start of the caught riff, or of the song.
+    func restart() {
+        seek(to: loop?.start ?? 0)
+        stepHaptic.selectionChanged()
+    }
+
     // MARK: Focus
 
     /// Any mix between the three stops; a light tick when passing one of them.
