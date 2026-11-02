@@ -1,5 +1,7 @@
+import AVFoundation
 import CoreML
 import Foundation
+import MusicUnderstanding
 import MusicCore
 import os
 
@@ -10,7 +12,7 @@ public enum NoteReader {
     private static let log = Logger(subsystem: RXLog.subsystem, category: "notes")
 
     /// - Parameter progress: 0…1, windows done / total.
-    public static func read(stems: [URL], duration: Seconds, model: BasicPitchModel,
+    public static func read(stems: [URL], duration: Seconds, model: BasicPitchModel, songURL: URL? = nil,
                             computeUnits: MLComputeUnits = .all,
                             progress: @escaping @Sendable (Double) -> Void) async throws -> NoteMap {
         let clock = ContinuousClock()
@@ -42,10 +44,28 @@ public enum NoteReader {
             notes: ActivationMatrix(frames: frames, bins: bins, values: Array(notes.prefix(frames * bins))),
             onsets: ActivationMatrix(frames: frames, bins: bins, values: Array(onsets.prefix(frames * bins))),
             duration: duration)
+        // The key: Apple's analysis of the whole song when available, else from the guitar's notes.
+        var key: SongKey?
+        if let songURL { key = await readKey(songURL) }
+        if key == nil { key = KeyFinder.estimate(detected) }
         let seconds = (clock.now - start).seconds
-        log.info("Read \(detected.count) notes in \(seconds, privacy: .public)s")
+        log.info("Read \(detected.count) notes in \(seconds, privacy: .public)s; key \(key?.name ?? "-", privacy: .public)")
         return NoteMap(model: "\(BasicPitchModel.Constants.modelVersion)+\(NoteMapBuilder.version)",
-                       sources: stems.map { $0.deletingPathExtension().lastPathComponent }, detected: detected, seconds: seconds)
+                       sources: stems.map { $0.deletingPathExtension().lastPathComponent }, detected: detected,
+                       seconds: seconds, key: key)
+    }
+
+    /// The song's main key from Music Understanding, or nil if it cannot tell.
+    static func readKey(_ url: URL) async -> SongKey? {
+        do {
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            let session = try await MusicUnderstandingSession(asset: asset)
+            let result = try await session.analyze(for: [.key])
+            return try MusicUnderstandingResult.decode(JSONEncoder().encode(result)).mainKey
+        } catch {
+            log.error("Key analysis failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     /// Sum of the stems, mono at Basic Pitch's sample rate.

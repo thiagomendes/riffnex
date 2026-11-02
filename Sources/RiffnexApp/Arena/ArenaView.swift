@@ -140,6 +140,18 @@ struct ArenaView: View {
                         .frame(minHeight: 44)
                         .accessibilityLabel("Afinação: \(model.tuning.title). Toque para trocar ou afinar a guitarra.")
                         .position(x: size.width - 86, y: size.height * 0.66)
+
+                        if let key = model.key {
+                            Text("TOM: \(key.name)")
+                                .font(.rxHUD(9))
+                                .foregroundStyle(RX.Palette.textSecondary)
+                                .padding(.horizontal, 8).frame(height: 24)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(RX.Palette.surface.opacity(0.9)))
+                                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(RX.Palette.hairline))
+                                .fixedSize()
+                                .accessibilityLabel("Tom da música: \(key.name)\(key.source == .notes ? ", estimado pelas notas da guitarra" : "")")
+                                .position(x: size.width - 86, y: size.height * 0.66 + 34)
+                        }
                     }
                 }
 
@@ -184,7 +196,7 @@ struct ArenaView: View {
     private var sceneInput: ArenaScene.Input {
         ArenaScene.Input(now: model.currentTime, playing: model.isPlaying, map: model.map, loop: model.loop,
                          focus: model.focus, speed: model.speed, laps: model.laps, ramping: model.ramping,
-                         lapsAtSpeed: model.lapsAtThisSpeed, selection: selection, notes: model.neck,
+                         lapsAtSpeed: model.lapsAtThisSpeed, selection: selection, notes: model.neck, roots: model.roots,
                          noteProgress: model.noteProgress, showNeck: showNeck)
     }
 

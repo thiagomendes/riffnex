@@ -97,6 +97,10 @@ final class ArenaModel {
     private(set) var tuning: TuningPreset = .standard
     /// The guessed notes placed on the neck for `tuning`.
     private(set) var neck: NeckNotes?
+    /// What the guitar is built on, beat by beat (E5, G, Am…).
+    private(set) var roots: [RootSpan] = []
+    /// The song's key, when known.
+    var key: SongKey? { notes?.key }
     /// A suggested tuning, shown until the user answers it.
     private(set) var suggestion: TuningSuggestion?
     private(set) var tuningAnswered = false
@@ -107,11 +111,13 @@ final class ArenaModel {
         guard let notes else { neck = nil; return }
         let detected = notes.detected
         let preset = tuning
-        let placed = await Task.detached(priority: .userInitiated) {
-            NoteMapBuilder.arrange(detected, tuning: preset.tuning)
+        let beats = map.beats, duration = map.duration
+        let (placed, track) = await Task.detached(priority: .userInitiated) {
+            (NoteMapBuilder.arrange(detected, tuning: preset.tuning), RootTrack.build(detected, beats: beats, duration: duration))
         }.value
         guard preset == tuning else { return }
         neck = placed
+        roots = track
         if !tuningAnswered, let found = TuningDetector.suggest(detected), found.preset != tuning {
             suggestion = found
         } else {

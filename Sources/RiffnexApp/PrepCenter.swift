@@ -115,7 +115,9 @@ final class PrepCenter {
         let stems = map.guitarStems.map { folder.appendingPathComponent("\($0).m4a") }
         noteTask = Task { [weak self, store, noteModel] in
             do {
-                let result = try await NoteReader.read(stems: stems, duration: map.duration, model: noteModel) { fraction in
+                let songURL = await store.song(id).map { store.audioURL(for: $0) }
+                let result = try await NoteReader.read(stems: stems, duration: map.duration, model: noteModel,
+                                                       songURL: songURL) { fraction in
                     Task { @MainActor in self?.noteProgress[id] = fraction }
                 }
                 try await store.save(result, for: id)

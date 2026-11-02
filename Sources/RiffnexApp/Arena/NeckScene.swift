@@ -49,7 +49,7 @@ enum NeckScene {
         func scale(_ z: Double) -> CGFloat { 1 - 0.7 * perspective(max(z, 0)) }
     }
 
-    static func draw(_ context: inout GraphicsContext, size: CGSize, now: Seconds, loop: LoopRegion?, notes: NeckNotes,
+    static func draw(_ context: inout GraphicsContext, size: CGSize, now: Seconds, loop: LoopRegion?, notes: NeckNotes, roots: [RootSpan],
                      map: RiffMap, pulse: Double, guitarAlpha: Double) {
         let f = Frame(size: size, now: now)
         let visible = placed(notes: notes, now: now, loop: loop)
@@ -59,6 +59,7 @@ enum NeckScene {
         drawTargets(&context, f, visible: visible, pulse: pulse, guitarAlpha: guitarAlpha)
         drawNotes(&context, f, visible: visible, guitarAlpha: guitarAlpha)
         drawHand(&context, f, visible: visible)
+        drawRoot(&context, f, roots: roots, loop: loop)
         drawTag(&context, f)
     }
 
@@ -176,14 +177,8 @@ enum NeckScene {
                 lit.fill(ring, with: .radialGradient(Gradient(colors: [.white, color]), center: center, startRadius: 0, endRadius: rx))
             }
             context.stroke(ring, with: .color(color.opacity(held ? 1 : 0.75)), lineWidth: 2.5)
-            if let sounding = visible.first(where: { $0.note.string == string && $0.start <= f.now && f.now < $0.end }) {
-                // The note you hear now, big inside the lit target.
-                context.draw(Text(letter(sounding.note.midi)).font(.rxBig(15)).foregroundStyle(Color(hex: 0x14081F)),
-                             at: center)
-            } else {
-                context.stroke(Path(ellipseIn: CGRect(x: center.x - rx * 0.55, y: center.y - ry * 0.55, width: rx * 1.1, height: ry * 1.1)),
-                               with: .color(color.opacity(0.35)), lineWidth: 1)
-            }
+            context.stroke(Path(ellipseIn: CGRect(x: center.x - rx * 0.55, y: center.y - ry * 0.55, width: rx * 1.1, height: ry * 1.1)),
+                           with: .color(color.opacity(0.35)), lineWidth: 1)
             // Flame on the hit: rises and fades in a third of a second.
             if let age = hit {
                 let k = 1 - age / 0.35
@@ -244,7 +239,6 @@ enum NeckScene {
                     context.draw(Text("\(note.fret)").font(.rxBig(14 * s)).foregroundStyle(Color(hex: 0x14081F).opacity(alpha)),
                                  at: CGPoint(x: center.x, y: center.y + 0.5 * s))
                 }
-                drawLetter(&context, note: note, center: center, ry: ry, scale: s, color: color, alpha: alpha)
             } else {
                 // Unsure: hollow, so you know to trust your ear here.
                 context.stroke(Path(ellipseIn: gem), with: .color(color.opacity(0.7 * alpha)),
@@ -253,27 +247,29 @@ enum NeckScene {
                     context.draw(Text("\(note.fret)").font(.rxHUD(12 * s, weight: .heavy)).foregroundStyle(color.opacity(0.8 * alpha)),
                                  at: center)
                 }
-                drawLetter(&context, note: note, center: center, ry: ry, scale: s, color: color, alpha: alpha * 0.6)
             }
         }
     }
 
-    static func letter(_ midi: Int) -> String {
-        NoteNaming.letters.name(of: MIDINote(unchecked: midi).pitchClass)
-    }
-
-    /// The note's name (E, G♯…) in a dark badge under the gem, readable over any lane.
-    private static func drawLetter(_ context: inout GraphicsContext, note: GuessedNote, center: CGPoint, ry: CGFloat,
-                                   scale: CGFloat, color: Color, alpha: Double) {
-        guard scale > 0.4 else { return }
-        let size = 10 + 4 * scale
-        let width = size * (letter(note.midi).count > 1 ? 2.1 : 1.6), height = size * 1.35
-        let badge = CGRect(x: center.x - width / 2, y: center.y + ry + 2 * scale, width: width, height: height)
-        let shape = Path(roundedRect: badge, cornerRadius: height / 2)
-        context.fill(shape, with: .color(Color(hex: 0x07060F).opacity(0.88 * alpha)))
-        context.stroke(shape, with: .color(color.opacity(alpha)), lineWidth: 1.2)
-        context.draw(Text(letter(note.midi)).font(.rxHUD(size, weight: .heavy)).foregroundStyle(Color.white.opacity(alpha)),
-                     at: CGPoint(x: badge.midX, y: badge.midY))
+    /// The root of what the guitar plays now (E5, G, Am…), big on the far end of the neck, with the
+    /// next one beside it. Inside a caught riff, "next" wraps to the riff's start.
+    private static func drawRoot(_ context: inout GraphicsContext, _ f: Frame, roots: [RootSpan], loop: LoopRegion?) {
+        let (current, following) = RootTrack.at(f.now, in: roots)
+        guard let current else { return }
+        var next = following
+        if let loop, loop.contains(f.now), next.map({ $0.start >= loop.end }) ?? true {
+            next = RootTrack.at(loop.start, in: roots).current
+        }
+        let point = CGPoint(x: f.cx, y: f.horizon + 30)
+        var glow = context
+        glow.addFilter(.shadow(color: RX.Palette.magenta, radius: 10))
+        glow.draw(Text(current.name).font(.rxBig(30)).foregroundStyle(RX.Palette.textPrimary), at: point)
+        if let next, next.name != current.name {
+            let soon = next.start > f.now && next.start - f.now < 1.2
+            context.draw(Text("→ \(next.name)").font(.rxHUD(13, weight: .heavy))
+                            .foregroundStyle(soon ? RX.Palette.fireLight : RX.Palette.textTertiary),
+                         at: CGPoint(x: point.x + 62, y: point.y + 2), anchor: .leading)
+        }
     }
 
     /// "MÃO NA CASA 5": where the hand should sit for the next notes.

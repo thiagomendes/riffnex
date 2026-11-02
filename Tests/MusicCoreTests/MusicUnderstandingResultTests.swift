@@ -14,6 +14,7 @@ struct MusicUnderstandingResultTests {
         #expect(mu.bars.count == 9)
         #expect(abs((BeatGrid.medianInterval(mu.beats) ?? 0) - 0.625) < 0.001)
         #expect(mu.sections.count == 3)
+        #expect(mu.mainKey?.name == "Em")
         #expect(abs(mu.sections[1].start - 10) < 0.01)
     }
 

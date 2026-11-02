@@ -242,3 +242,60 @@ struct TuningDetectorTests {
         #expect(TuningPreset.halfDown.stringNames == "E♭ A♭ D♭ G♭ B♭ E♭")
     }
 }
+
+@Suite("Harmony")
+struct HarmonyTests {
+    func n(_ midi: Int, _ start: Double, _ end: Double) -> DetectedNote {
+        DetectedNote(start: start, end: end, midi: midi, amplitude: 0.8)
+    }
+
+    @Test func powerChordsBecomeRootSpans() {
+        // E5 for two beats, then G5 for two beats (root + fifth + octave).
+        let notes = [n(40, 0, 1), n(47, 0, 1), n(52, 0, 1), n(43, 1, 2), n(50, 1, 2), n(55, 1, 2)]
+        let spans = RootTrack.build(notes, beats: [0, 0.5, 1, 1.5], duration: 2)
+        #expect(spans.map(\.name) == ["E5", "G5"])
+        #expect(spans.first?.end == 1)
+        let (current, next) = RootTrack.at(0.7, in: spans)
+        #expect(current?.name == "E5" && next?.name == "G5")
+    }
+
+    @Test func aPassingNoteDoesNotFlicker() {
+        // A riff on E with one passing low D beat in the middle.
+        let notes = [n(40, 0, 0.5), n(38, 0.5, 1.0), n(40, 1.0, 1.5), n(40, 1.5, 2)]
+        let spans = RootTrack.build(notes, beats: [0, 0.5, 1, 1.5], duration: 2)
+        #expect(spans.map(\.name) == ["E"])
+    }
+
+    @Test func thirdsGiveMajorAndMinor() {
+        let a = RootTrack.build([n(45, 0, 1), n(49, 0, 1), n(52, 0, 1)], beats: [0, 0.5], duration: 1)
+        #expect(a.map(\.name) == ["A"])
+        let am = RootTrack.build([n(45, 0, 1), n(48, 0, 1), n(52, 0, 1)], beats: [0, 0.5], duration: 1)
+        #expect(am.map(\.name) == ["Am"])
+    }
+
+    @Test func keyFromNotes() {
+        // E minor pentatonic riff, heavy on E.
+        var notes: [DetectedNote] = []
+        var t = 0.0
+        for midi in [40, 43, 45, 47, 50, 40, 40, 43, 45, 40, 52, 47] {
+            notes.append(n(midi, t, t + 0.4))
+            t += 0.5
+        }
+        let key = KeyFinder.estimate(notes)
+        #expect(key?.name == "Em")
+        #expect(key?.source == .notes)
+    }
+
+    @Test func keyNames() {
+        #expect(SongKey(tonic: .fSharp, minor: true, source: .notes).name == "F♯m")
+        #expect(SongKey(tonic: .aSharp, minor: false, source: .notes).name == "B♭")
+        #expect(SongKey(tonic: .e, minor: false, source: .notes).name == "E")
+    }
+
+    @Test func musicUnderstandingKey() throws {
+        let json = #"{"key":{"ranges":[{"range":{"start":{"value":0,"timescale":1,"flags":1,"epoch":0},"duration":{"value":30,"timescale":1,"flags":1,"epoch":0}},"value":{"tonic":"f#","mode":"minor"}},{"range":{"start":{"value":30,"timescale":1,"flags":1,"epoch":0},"duration":{"value":5,"timescale":1,"flags":1,"epoch":0}},"value":{"tonic":"a","mode":"major"}}]}}"#
+        let mu = try MusicUnderstandingResult.decode(Data(json.utf8))
+        #expect(mu.mainKey?.name == "F♯m")
+        #expect(mu.mainKey?.source == .musicUnderstanding)
+    }
+}

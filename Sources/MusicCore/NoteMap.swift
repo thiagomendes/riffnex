@@ -3,8 +3,8 @@ import Foundation
 /// Notes guessed from the separated guitar. Stored independent of tuning (pitch and time only), so
 /// changing the tuning only re-runs the fingering. A guess, not a transcription.
 public struct NoteMap: Codable, Sendable, Equatable {
-    /// 2: detected pitches are stored without string/fret (tuning chosen per song).
-    public static let currentSchemaVersion = 2
+    /// 2: detected pitches are stored without string/fret (tuning chosen per song). 3: the song's key.
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var createdAt: Date
@@ -15,9 +15,12 @@ public struct NoteMap: Codable, Sendable, Equatable {
     /// Sorted by start time.
     public var detected: [DetectedNote]
     public var seconds: Double
+    /// The song's key (Music Understanding, or estimated from these notes when it is unavailable).
+    public var key: SongKey?
 
     public init(schemaVersion: Int = NoteMap.currentSchemaVersion, createdAt: Date = Date(), model: String,
-                sources: [String], detected: [DetectedNote], seconds: Double) {
+                sources: [String], detected: [DetectedNote], seconds: Double, key: SongKey? = nil) {
+        self.key = key
         self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.model = model

@@ -38,6 +38,7 @@ enum ArenaScene {
         var selection: ClosedRange<Seconds>?
         /// Guessed notes, when read; `noteProgress` while they are being read.
         var notes: NeckNotes?
+        var roots: [RootSpan] = []
         var noteProgress: Double?
         var showNeck: Bool
     }
@@ -54,7 +55,7 @@ enum ArenaScene {
         let bandAlpha = 0.1 + 0.9 * ArenaModel.bandLevel(input.focus)
 
         if input.showNeck, let notes = input.notes {
-            NeckScene.draw(&context, size: size, now: input.now, loop: input.loop, notes: notes, map: input.map,
+            NeckScene.draw(&context, size: size, now: input.now, loop: input.loop, notes: notes, roots: input.roots, map: input.map,
                            pulse: pulse, guitarAlpha: guitarAlpha)
         } else {
             drawFloor(&context, g: g, input: input, pulse: pulse)
