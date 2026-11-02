@@ -1,8 +1,13 @@
 # RIFFNEX
 
-**Da escuta ao toque. (From listening to playing.)** RIFFNEX is an iPhone app that turns songs you own into an interactive guitar lesson. It analyzes the audio on-device, then shows notes, chords and recommended fingering on a fretboard, all synced to the recording.
+**Da escuta ao toque. (From listening to playing.)** RIFFNEX is an iPhone app that helps you learn guitar parts **by ear** from songs you own. It separates the guitar from the rest of the band on the device, then lets you hear the guitar alone, the band without it, or both, at any speed, and catch a riff in a ring that repeats it until you can play it.
 
-> **Status: M2 (analysis v1).** On top of M1 (import, library, practice player with speed and A–B loop), every song can now be analyzed **on the iPhone**. Notes come from Spotify's Basic Pitch (with a Swift port of its note decoding that matches the reference exactly) plus guitar-specific clean-up. Chords are estimated beat by beat. Tempo, key and section boundaries come from Apple's Music Understanding. Each song also gets an honest quality report. The player shows the current chord and section, and the Song Overview explains where each fact came from. Measured results on the demo are in [`docs/quality/m2-demo-baseline.md`](docs/quality/m2-demo-baseline.md). **M3 (in progress on the same branch):** a fingering optimizer recommends string, fret and finger for every note; the Studio shows a fretboard that follows the hand and a scrolling tab; a sample-accurate metronome with a one-bar count-in follows the beat grid; tapping the fretboard explains each note's origin. Test script for the owner's iPhone: [`docs/teste-m1-m2-m3.md`](docs/teste-m1-m2-m3.md).
+> **Status: one-screen rewrite (Nov 2026).** After testing the note-transcription version on the owner's iPhone, we cut every feature built on automatic note detection (tab, fingering, highway, chords, metronome, quality report). Their accuracy on full-band songs was not good enough to teach from. What stayed is what the device measures reliably:
+> - guitar separation (Demucs `htdemucs_6s`, Core ML);
+> - tempo, beats and sections (Apple Music Understanding);
+> - loudness envelopes and guitar attacks measured on the separated audio.
+>
+> Every number on screen is something the app really knows: laps, speed, time practised. Test script for the owner's iPhone: [`docs/teste-arena.md`](docs/teste-arena.md) (Portuguese). The design documents below describe the original plan and are kept for history.
 
 ## Documents
 
@@ -13,13 +18,13 @@
 | [`docs/03-architecture.md`](docs/03-architecture.md) | Modules, domain model, analysis pipeline, fingering optimizer, playback, persistence, dependencies, testing, privacy, decision log |
 | [`docs/04-roadmap.md`](docs/04-roadmap.md) | MVP scope, explicit exclusions, milestones, open decisions |
 
-## Planned stack
+## Stack
 
-Swift 6 · SwiftUI · AVAudioEngine · Core ML (Spotify Basic Pitch, Apache-2.0) · Apple Music Understanding (iOS 27) · Accelerate. No backend in the MVP; all analysis runs on-device.
+Swift 6 · SwiftUI (Canvas) · AVAudioEngine · Core ML (Demucs v4 `htdemucs_6s`, MIT) · Apple Music Understanding (iOS 27) · Accelerate. No backend; everything runs on-device.
 
 ## Build instructions
 
-**Easiest (Windows, no WSL):** CI builds an unsigned `.ipa` on every push (`.github/workflows/ipa.yml`); install it with Sideloadly — see **[`docs/instalar-no-windows.md`](docs/instalar-no-windows.md)** (Portuguese). Alternatively see **[`docs/toolchain.md`](docs/toolchain.md)** for step-by-step instructions (in Portuguese). No Mac is required. Builds use [xtool](https://github.com/xtool-org/xtool) on Linux or Windows (WSL) with Swift 6.4 and an iOS SDK extracted from Xcode 27.1, and the app is installed on the iPhone over USB. CI builds and tests on GitHub Actions macOS runners.
+**Easiest:** every push to the app branch is uploaded to TestFlight (`.github/workflows/testflight.yml`; setup in [`docs/testflight.md`](docs/testflight.md), Portuguese). CI also builds an unsigned `.ipa` on every push (`.github/workflows/ipa.yml`); install it with Sideloadly — see **[`docs/instalar-no-windows.md`](docs/instalar-no-windows.md)** (Portuguese). Alternatively see **[`docs/toolchain.md`](docs/toolchain.md)** for step-by-step instructions (in Portuguese). No Mac is required. Builds use [xtool](https://github.com/xtool-org/xtool) on Linux or Windows (WSL) with Swift 6.4 and an iOS SDK extracted from Xcode 27.1, and the app is installed on the iPhone over USB. CI builds and tests on GitHub Actions macOS runners.
 
 ### Tests
 
@@ -30,7 +35,7 @@ Swift 6 · SwiftUI · AVAudioEngine · Core ML (Spotify Basic Pitch, Apache-2.0)
 
 - `python3 tools/make_icon.py` regenerates `App/AppIcon.png` (needs numpy and Pillow).
 - `python3 tools/fixtures/make_demo.py` regenerates the demo song and its ground truth (needs numpy and ffmpeg).
-- `python tools/fixtures/make_golden.py` regenerates the Basic Pitch golden vectors in `Tests/Fixtures` from the reference implementation (setup in the script header; no TensorFlow needed).
+- `python tools/separation/convert_htdemucs.py` converts Demucs to Core ML (run in CI by `.github/workflows/separation-model.yml`).
 
 ## Licenses
 
