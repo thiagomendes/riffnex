@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import CoreML
+import MusicCore
 import Testing
 @testable import AnalysisEngine
 
@@ -10,6 +11,7 @@ private enum SeparationFixtures {
     static let stft = repo.appendingPathComponent("Tests/Fixtures/demucs-stft.json")
     static let envelopes = repo.appendingPathComponent("Tests/Fixtures/demucs-demo-envelopes.json")
     static let demo = repo.appendingPathComponent("Sources/RiffnexApp/Resources/Demo/riffnex-demo.m4a")
+    static let truth = repo.appendingPathComponent("tools/fixtures/riffnex-demo.truth.json")
 
     struct STFT: Decodable {
         let signal: [Float]
@@ -104,6 +106,23 @@ struct StemSeparatorTests {
         #expect(map.guitar.allSatisfy { $0 >= 0 && $0 <= 1 } && map.band.allSatisfy { $0 >= 0 && $0 <= 1 })
         // The demo riff is mostly eighth notes at 96 BPM: well over a hundred attacks in 21 s.
         #expect(map.guitarAttacks.count > 60, "attacks: \(map.guitarAttacks.count)")
+        // Notes guessed from the separated guitar, scored against the demo's ground truth.
+        let noteMap = try await NoteReader.read(stems: map.guitarStems.map { directory.appendingPathComponent("\($0).m4a") },
+                                                duration: map.duration, model: BasicPitchModel(), computeUnits: .cpuOnly) { _ in }
+        let truth = try JSONDecoder().decode(DemoTruth.self, from: Data(contentsOf: SeparationFixtures.truth))
+        var matched = 0
+        var used = Set<Int>()
+        for ref in truth.notes {
+            if let i = noteMap.notes.indices.first(where: { !used.contains($0) && noteMap.notes[$0].midi == ref.midi
+                && abs(noteMap.notes[$0].start - ref.onset) <= 0.05 }) {
+                used.insert(i)
+                matched += 1
+            }
+        }
+        let precision = Double(matched) / Double(max(noteMap.notes.count, 1))
+        let recall = Double(matched) / Double(max(truth.notes.count, 1))
+        print("[notes from separated guitar] \(noteMap.notes.count) guessed, \(truth.notes.count) true, matched \(matched): precision \(String(format: "%.2f", precision)), recall \(String(format: "%.2f", recall)); sure \(noteMap.notes.filter(\.sure).count); \(String(format: "%.1f", noteMap.seconds)) s")
+        #expect(recall >= 0.6, "recall \(recall)")
         let result = (duration: map.duration, stems: Dictionary(uniqueKeysWithValues: map.stemNames.map {
             ($0, directory.appendingPathComponent("\($0).m4a"))
         }))
@@ -180,4 +199,14 @@ struct ModelOutputCopyTests {
         let values = try StemSeparator.floats(array, expected: 30)
         #expect(values == expected)
     }
+}
+
+/// The demo's ground truth (written by tools/fixtures/make_demo.py).
+struct DemoTruth: Decodable {
+    struct Note: Decodable {
+        let onset: Double
+        let midi: Int
+    }
+
+    let notes: [Note]
 }

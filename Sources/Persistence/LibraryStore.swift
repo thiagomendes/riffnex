@@ -117,6 +117,10 @@ public actor LibraryStore {
         folder(for: id).appendingPathComponent("riffmap.json")
     }
 
+    public nonisolated func noteMapURL(for id: UUID) -> URL {
+        folder(for: id).appendingPathComponent("notes.json")
+    }
+
     private nonisolated func stateURL(for id: UUID) -> URL {
         folder(for: id).appendingPathComponent("state.json")
     }
@@ -217,6 +221,19 @@ public actor LibraryStore {
     public func save(_ map: RiffMap, for id: UUID) throws {
         guard song(id) != nil else { throw LibraryError.unknownSong(id) }
         try write(map, to: riffMapURL(for: id))
+    }
+
+    /// Guessed notes, or `nil` if missing or from another schema (they are then read again).
+    public func noteMap(for id: UUID) -> NoteMap? {
+        guard let data = try? Data(contentsOf: noteMapURL(for: id)),
+              let map = try? Self.decoder.decode(NoteMap.self, from: data),
+              map.schemaVersion == NoteMap.currentSchemaVersion else { return nil }
+        return map
+    }
+
+    public func save(_ map: NoteMap, for id: UUID) throws {
+        guard song(id) != nil else { throw LibraryError.unknownSong(id) }
+        try write(map, to: noteMapURL(for: id))
     }
 
     public func removeRiffMap(for id: UUID) throws {

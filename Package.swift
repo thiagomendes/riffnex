@@ -51,6 +51,9 @@ if !coreOnly {
             name: "AnalysisEngine",
             dependencies: ["MusicCore"],
             resources: [
+                // Spotify Basic Pitch (Apache-2.0). Copied verbatim; compiled on device at first use
+                // because model compilation (coremlc) is only available inside Xcode.
+                .copy("Resources/BasicPitch"),
                 // Demucs v4 htdemucs_6s (Meta AI, MIT), converted to Core ML by
                 // tools/separation/convert_htdemucs.py; compiled on device at first use.
                 .copy("Resources/Separation"),

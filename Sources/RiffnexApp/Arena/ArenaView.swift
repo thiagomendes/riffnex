@@ -37,6 +37,7 @@ struct ArenaView: View {
     @State private var toast: String?
     @State private var toastID = 0
     @State private var clock = FrameClock()
+    @AppStorage("rx.showNeck") private var showNeck = true
     @Environment(\.dismiss) private var dismiss
 
     init(song: SongRecord, map: RiffMap, app: AppModel) {
@@ -78,12 +79,13 @@ struct ArenaView: View {
 
                 VStack(spacing: 0) {
                     hud
-                    Spacer()
+                    // Guidance and ring actions sit under the HUD, leaving the floor to the neck.
                     if model.loop == nil {
                         hints
                     } else {
                         ringBar
                     }
+                    Spacer()
                     controls
                 }
                 .padding(.horizontal, RX.Space.m)
@@ -95,6 +97,21 @@ struct ArenaView: View {
                 }
                 .frame(width: 34, height: size.height * 0.34)
                 .position(x: size.width - 21, y: size.height * 0.45)
+
+                if model.notes != nil || model.noteProgress != nil {
+                    Button {
+                        showNeck.toggle()
+                        show(showNeck ? "Notas estimadas" : "Braço escondido")
+                    } label: {
+                        Image(systemName: showNeck ? "guitars.fill" : "guitars")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(showNeck ? RX.Palette.fireLight : RX.Palette.textTertiary)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(RX.Palette.surface.opacity(0.85)))
+                    }
+                    .accessibilityLabel(showNeck ? "Esconder o braço com as notas estimadas" : "Mostrar o braço com as notas estimadas")
+                    .position(x: 34, y: size.height * 0.66)
+                }
 
                 if let toast {
                     Text(toast)
@@ -115,7 +132,8 @@ struct ArenaView: View {
     private var sceneInput: ArenaScene.Input {
         ArenaScene.Input(now: model.currentTime, playing: model.isPlaying, map: model.map, loop: model.loop,
                          focus: model.focus, speed: model.speed, laps: model.laps, ramping: model.ramping,
-                         lapsAtSpeed: model.lapsAtThisSpeed, selection: selection)
+                         lapsAtSpeed: model.lapsAtThisSpeed, selection: selection, notes: model.notes,
+                         noteProgress: model.noteProgress, showNeck: showNeck)
     }
 
     // MARK: HUD
@@ -158,7 +176,7 @@ struct ArenaView: View {
             HintChip(symbol: "arrow.left.and.right", text: "andar")
             HintChip(symbol: "hand.tap", text: "segure e arraste: prender o riff")
         }
-        .padding(.bottom, RX.Space.m)
+        .padding(.top, RX.Space.s)
         .allowsHitTesting(false)
     }
 
@@ -173,7 +191,7 @@ struct ArenaView: View {
                 .buttonStyle(ArenaButtonStyle(prominent: false, active: false))
                 .accessibilityHint("Solta o trecho e volta para a música inteira.")
         }
-        .padding(.bottom, RX.Space.m)
+        .padding(.top, RX.Space.s)
     }
 
     private var controls: some View {

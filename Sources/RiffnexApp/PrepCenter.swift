@@ -41,6 +41,11 @@ final class PrepCenter {
     }
 
     private(set) var maps: [UUID: RiffMap] = [:]
+    /// Notes guessed from the separated guitar (read after separation, ~1 minute).
+    private(set) var notes: [UUID: NoteMap] = [:]
+    /// 0…1 while a song's notes are being read.
+    private(set) var noteProgress: [UUID: Double] = [:]
+    private var noteQueue: [UUID] = []
     private(set) var current: Job?
     private(set) var queue: [UUID] = []
     private(set) var failures: [UUID: String] = [:]
@@ -49,6 +54,8 @@ final class PrepCenter {
     @ObservationIgnored private let store: LibraryStore
     @ObservationIgnored private let preparer = RiffPreparer()
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var noteTask: Task<Void, Never>?
+    @ObservationIgnored private let noteModel = BasicPitchModel()
     @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     @ObservationIgnored private let log = Logger(subsystem: RXLog.subsystem, category: "prep-center")
 
@@ -81,7 +88,53 @@ final class PrepCenter {
         let complete = map.stemNames.allSatisfy {
             FileManager.default.fileExists(atPath: folder.appendingPathComponent("\($0).m4a").path)
         }
-        if complete { maps[id] = map }
+        guard complete else { return }
+        maps[id] = map
+        if let stored = await store.noteMap(for: id) {
+            notes[id] = stored
+        } else {
+            readNotes(id)
+        }
+    }
+
+    // MARK: Notes
+
+    private func readNotes(_ id: UUID) {
+        guard notes[id] == nil, !noteQueue.contains(id), noteProgress[id] == nil else { return }
+        noteQueue.append(id)
+        runNotesIfIdle()
+    }
+
+    /// One song at a time, and never during a separation (both use the Neural Engine).
+    private func runNotesIfIdle() {
+        guard current == nil, noteTask == nil, !noteQueue.isEmpty else { return }
+        let id = noteQueue.removeFirst()
+        guard let map = maps[id] else { return runNotesIfIdle() }
+        noteProgress[id] = 0
+        let folder = store.folder(for: id).appendingPathComponent(map.stemsDirectory, isDirectory: true)
+        let stems = map.guitarStems.map { folder.appendingPathComponent("\($0).m4a") }
+        noteTask = Task { [weak self, store, noteModel] in
+            do {
+                let result = try await NoteReader.read(stems: stems, duration: map.duration, model: noteModel) { fraction in
+                    Task { @MainActor in self?.noteProgress[id] = fraction }
+                }
+                try await store.save(result, for: id)
+                await MainActor.run { self?.finishNotes(id, result) }
+            } catch {
+                await MainActor.run { self?.finishNotes(id, nil) }
+            }
+        }
+    }
+
+    private func finishNotes(_ id: UUID, _ result: NoteMap?) {
+        noteProgress[id] = nil
+        if let result {
+            notes[id] = result
+            log.info("Notes for \(id, privacy: .public): \(result.notes.count) in \(result.seconds, privacy: .public)s")
+        }
+        noteTask = nil
+        runNotesIfIdle()
+        runNextIfIdle()
     }
 
     func prepare(_ song: SongRecord) {
@@ -98,7 +151,9 @@ final class PrepCenter {
 
     func forget(_ id: UUID) {
         cancel(id)
+        noteQueue.removeAll { $0 == id }
         maps[id] = nil
+        notes[id] = nil
         failures[id] = nil
         known.remove(id)
     }
@@ -106,7 +161,7 @@ final class PrepCenter {
     // MARK: Running
 
     private func runNextIfIdle() {
-        guard current == nil, !queue.isEmpty else { return }
+        guard current == nil, noteTask == nil, !queue.isEmpty else { return }
         let id = queue.removeFirst()
         current = Job(songID: id, stage: .separating, fraction: 0, startedAt: Date())
         beginBackgroundTime()
@@ -170,6 +225,9 @@ final class PrepCenter {
         current = nil
         task = nil
         endBackgroundTime()
+        // Notes first (about a minute), then the next separation.
+        if case .success = result { readNotes(id) }
+        runNotesIfIdle()
         runNextIfIdle()
     }
 

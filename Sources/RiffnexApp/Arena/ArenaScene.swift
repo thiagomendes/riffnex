@@ -36,6 +36,10 @@ enum ArenaScene {
         var ramping: Bool
         var lapsAtSpeed: Int
         var selection: ClosedRange<Seconds>?
+        /// Guessed notes, when read; `noteProgress` while they are being read.
+        var notes: NoteMap?
+        var noteProgress: Double?
+        var showNeck: Bool
     }
 
     static func draw(_ context: inout GraphicsContext, size: CGSize, input: Input, fx: ArenaFX, dt: Double) {
@@ -49,7 +53,17 @@ enum ArenaScene {
         let guitarAlpha = 0.12 + 0.88 * ArenaModel.guitarLevel(input.focus)
         let bandAlpha = 0.1 + 0.9 * ArenaModel.bandLevel(input.focus)
 
-        drawFloor(&context, g: g, input: input, pulse: pulse)
+        if input.showNeck, let notes = input.notes {
+            NeckScene.draw(&context, size: size, now: input.now, loop: input.loop, notes: notes, map: input.map,
+                           pulse: pulse, guitarAlpha: guitarAlpha)
+        } else {
+            drawFloor(&context, g: g, input: input, pulse: pulse)
+            if input.showNeck, let progress = input.noteProgress {
+                context.draw(Text("LENDO AS NOTAS DA GUITARRA \(Int(progress * 100))%").font(.rxHUD(10))
+                                .foregroundStyle(RX.Palette.textSecondary),
+                             at: CGPoint(x: g.cx, y: g.size.height * 0.75))
+            }
+        }
         if e < 0.99 { drawTape(&context, g: g, input: input, alpha: 1 - e, guitarAlpha: guitarAlpha, bandAlpha: bandAlpha, pulse: pulse) }
         if let loop = input.loop ?? fx.lastLoop {
             if input.loop != nil { fx.lastLoop = input.loop }

@@ -84,6 +84,10 @@ final class ArenaModel {
 
     // MARK: Transport
 
+    /// Notes guessed from the separated guitar, once read.
+    var notes: NoteMap? { app.prep.notes[song.id] }
+    var noteProgress: Double? { app.prep.noteProgress[song.id] }
+
     var isPlaying: Bool { player.isPlaying }
     var currentTime: Seconds { player.currentTime }
     var duration: Seconds { player.duration }
