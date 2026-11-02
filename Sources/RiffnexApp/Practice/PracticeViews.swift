@@ -59,6 +59,7 @@ private struct GridKey: Equatable {
 }
 
 /// Which separated tracks stand in for "the guitar": the ones the notes were detected on.
+@MainActor
 enum PracticeAudio {
     static func replacedStems(_ analysis: SongAnalysis, player: AudioPlayer) -> [String] {
         let sources = analysis.stems?.noteSources ?? ["guitar"]
