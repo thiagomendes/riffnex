@@ -111,27 +111,22 @@ public actor BasicPitchModel {
         return report
     }
 
-    public struct WindowOutput: Sendable {
-        /// Shapes as reported by Core ML, e.g. [1, 172, 88].
-        public let noteShape: [Int]
-        public let onsetShape: [Int]
-        public let contourShape: [Int]
-        public let maxNoteActivation: Float
-        /// MIDI pitch of the strongest note activation in the window (A0 = 21).
-        public let strongestMIDI: Int
+    public struct WindowActivations: Sendable {
+        public let frames: Int
+        public let notes: [Float]
+        public let onsets: [Float]
         public let seconds: Double
     }
 
-    /// Runs one window of audio (exactly `Constants.windowSamples` samples, zero-padded by the caller).
-    public func predictWindow(_ samples: [Float]) async throws -> WindowOutput {
+    /// Runs one window (exactly `Constants.windowSamples` samples) and returns its note/onset activations.
+    public func activations(for samples: [Float], computeUnits: MLComputeUnits = .all) throws -> WindowActivations {
         precondition(samples.count == Constants.windowSamples, "Window must be \(Constants.windowSamples) samples")
-        if model == nil { try await load() }
+        if model == nil || loadedUnits != computeUnits { try loadSynchronously(computeUnits: computeUnits) }
         guard let model else { throw ModelError.missingResource }
-
         let input = try MLMultiArray(shape: [1, NSNumber(value: Constants.windowSamples), 1], dataType: .float32)
         samples.withUnsafeBufferPointer { source in
-            let destination = input.dataPointer.bindMemory(to: Float.self, capacity: samples.count)
-            destination.update(from: source.baseAddress!, count: samples.count)
+            input.dataPointer.bindMemory(to: Float.self, capacity: samples.count)
+                .update(from: source.baseAddress!, count: samples.count)
         }
         let clock = ContinuousClock()
         let start = clock.now
