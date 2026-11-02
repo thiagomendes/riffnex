@@ -62,6 +62,48 @@ jobs:
           plutil -p "$APP/Info.plist"
           du -sh "$APP"
 
+      - name: Make the bundle App Store ready
+        run: |
+          # 1. App icon as a compiled asset catalog (App Store requires Assets.car + CFBundleIcons).
+          CAT="$RUNNER_TEMP/Assets.xcassets"
+          mkdir -p "$CAT/AppIcon.appiconset"
+          sips -s format png -z 1024 1024 App/AppIcon.png --out "$CAT/AppIcon.appiconset/icon-1024.png" >/dev/null
+          # App Store icons must not have an alpha channel.
+          sips -s format jpeg "$CAT/AppIcon.appiconset/icon-1024.png" --out "$RUNNER_TEMP/icon.jpg" >/dev/null
+          sips -s format png "$RUNNER_TEMP/icon.jpg" --out "$CAT/AppIcon.appiconset/icon-1024.png" >/dev/null
+          cat > "$CAT/Contents.json" <<'EOF'
+          {"info":{"author":"xcode","version":1}}
+          EOF
+          cat > "$CAT/AppIcon.appiconset/Contents.json" <<'EOF'
+          {"images":[{"filename":"icon-1024.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}
+          EOF
+          xcrun actool "$CAT" --compile "$APP" --platform iphoneos --minimum-deployment-target 27.0 \
+            --app-icon AppIcon --target-device iphone --output-format human-readable-text \
+            --output-partial-info-plist "$RUNNER_TEMP/icon-info.plist"
+          /usr/libexec/PlistBuddy -c "Merge $RUNNER_TEMP/icon-info.plist" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$APP/Info.plist" 2>/dev/null || true
+          rm -f "$APP/AppIcon.png"
+          # 2. Build metadata App Store Connect checks: the SDK and Xcode that compiled the app
+          #    (xtool on macOS builds with this runner's Xcode toolchain and iPhoneOS SDK).
+          SDK_VERSION=$(xcrun --sdk iphoneos --show-sdk-version)
+          SDK_BUILD=$(xcrun --sdk iphoneos --show-sdk-build-version)
+          XCODE_VERSION=$(xcodebuild -version | awk '/^Xcode/{print $2}')
+          XCODE_BUILD=$(xcodebuild -version | awk '/Build version/{print $3}')
+          XCODE_NUM=$(echo "$XCODE_VERSION" | awk -F. '{printf "%02d%d%d", $1, $2, ($3==""?0:$3)}')
+          set_key() { /usr/libexec/PlistBuddy -c "Delete :$1" "$APP/Info.plist" 2>/dev/null || true; /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$APP/Info.plist"; }
+          set_key DTPlatformName iphoneos
+          set_key DTPlatformVersion "$SDK_VERSION"
+          set_key DTPlatformBuild "$SDK_BUILD"
+          set_key DTSDKName "iphoneos$SDK_VERSION"
+          set_key DTSDKBuild "$SDK_BUILD"
+          set_key DTXcode "$XCODE_NUM"
+          set_key DTXcodeBuild "$XCODE_BUILD"
+          set_key DTCompiler com.apple.compilers.llvm.clang.1_0
+          set_key BuildMachineOSBuild "$(sw_vers -buildVersion)"
+          plutil -lint "$APP/Info.plist"
+          plutil -p "$APP/Info.plist" | grep -E "CFBundleIcon|DT|BuildMachine"
+          ls -la "$APP" | grep -E "Assets.car|AppIcon"
+
       - name: Wrap it in an .xcarchive
         run: |
           NAME=$(basename "$APP")
