@@ -56,8 +56,8 @@ private struct GeneratedCover: View {
                 path.addLine(to: CGPoint(x: center.x + cos(angle) * length, y: center.y + sin(angle) * length))
                 let t = Double(i) / Double(peaks.count)
                 let color = t < 0.5
-                    ? blend(RX.Palette.violet, RX.Palette.blue, t * 2)
-                    : blend(RX.Palette.blue, RX.Palette.cyan, (t - 0.5) * 2)
+                    ? blend(RX.Palette.fireLight, RX.Palette.fire, t * 2)
+                    : blend(RX.Palette.fire, RX.Palette.magenta, (t - 0.5) * 2)
                 context.stroke(path, with: .color(color.opacity(0.9)),
                                style: StrokeStyle(lineWidth: max(1.5, radius * 0.035), lineCap: .round))
             }
@@ -115,7 +115,7 @@ public struct WaveformBars: View {
                 let x1 = size.width * loop.upperBound
                 let rect = CGRect(x: x0, y: 0, width: max(2, x1 - x0), height: size.height)
                 context.fill(Path(roundedRect: rect, cornerRadius: 6),
-                             with: .color(RX.Palette.blue.opacity(loopEnabled ? 0.22 : 0.10)))
+                             with: .color(RX.Palette.cyan.opacity(loopEnabled ? 0.22 : 0.10)))
             }
 
             for i in 0..<barCount {

@@ -1,0 +1,266 @@
+import Foundation
+import MusicCore
+import Observation
+import Persistence
+import PlaybackEngine
+import UIKit
+
+/// State of the practice screen for one prepared song: what you hear (focus), how fast, and
+/// which riff is caught in the ring. Everything shown is something the app really knows:
+/// laps played, the speed you chose, time practised.
+@MainActor
+@Observable
+final class ArenaModel {
+    /// +1 only the guitar, 0 everything, −1 the band without the guitar.
+    private(set) var focus: Double = 0
+    private(set) var speed: Double = 1
+    private(set) var loop: LoopRegion?
+    private(set) var laps = 0
+    private(set) var ramping = false
+    private(set) var lapsAtThisSpeed = 0
+    private(set) var practicedSeconds: Double = 0
+
+    static let speedRange: ClosedRange<Double> = 0.4...1
+    static let rampStep = 0.05
+    static let lapsPerStep = 2
+
+    let song: SongRecord
+    let map: RiffMap
+    let player: AudioPlayer
+    /// Frame-rate visual state (particles, banners); not observed.
+    @ObservationIgnored let fx = ArenaFX()
+
+    @ObservationIgnored private let app: AppModel
+    @ObservationIgnored private var ticker: Task<Void, Never>?
+    @ObservationIgnored private var lastTime: Seconds = 0
+    @ObservationIgnored private let lapHaptic = UIImpactFeedbackGenerator(style: .light)
+    @ObservationIgnored private let stepHaptic = UISelectionFeedbackGenerator()
+    @ObservationIgnored private let bigHaptic = UIImpactFeedbackGenerator(style: .medium)
+
+    init(song: SongRecord, map: RiffMap, app: AppModel) {
+        self.song = song
+        self.map = map
+        self.app = app
+        self.player = app.player
+    }
+
+    // MARK: Lifecycle
+
+    func start() async {
+        let stems = app.stemSources(for: song, map: map)
+        do {
+            try player.load(url: app.audioURL(for: song), title: song.title, artist: song.artist, stems: stems)
+        } catch {
+            return
+        }
+        let state = await app.studioState(for: song)
+        practicedSeconds = state.practicedSeconds
+        setSpeed(Self.speedRange.contains(state.rate) ? state.rate : 1, haptic: false)
+        if let saved = state.loop, state.loopEnabled {
+            catchRiff(saved, animated: false)
+        } else {
+            player.seek(to: state.position)
+        }
+        applyFocus()
+        lastTime = player.currentTime
+        ticker = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.tick()
+                try? await Task.sleep(for: .milliseconds(16))
+            }
+        }
+    }
+
+    func stop() async {
+        ticker?.cancel()
+        ticker = nil
+        player.pause()
+        practicedSeconds += player.takePracticedSeconds()
+        let state = StudioState(position: player.currentTime, rate: speed, loop: loop, loopEnabled: loop != nil,
+                                practicedSeconds: practicedSeconds)
+        await app.save(state, for: song)
+        player.unload()
+    }
+
+    // MARK: Transport
+
+    var isPlaying: Bool { player.isPlaying }
+    var currentTime: Seconds { player.currentTime }
+    var duration: Seconds { player.duration }
+
+    func togglePlay() {
+        player.togglePlayPause()
+        lastTime = player.currentTime
+    }
+
+    func pause() { player.pause() }
+
+    func seek(to time: Seconds) {
+        player.seek(to: min(max(0, time), duration))
+        lastTime = player.currentTime
+    }
+
+    // MARK: Focus
+
+    func setFocus(_ value: Double) {
+        focus = min(max(value, -1), 1)
+        applyFocus()
+    }
+
+    /// Snaps to the nearest of the three stops when close to one. Returns the stop reached.
+    @discardableResult
+    func settleFocus() -> Double? {
+        guard let stop = [1.0, 0, -1].first(where: { abs($0 - focus) < 0.34 }) else { return nil }
+        let changed = stop != focus
+        setFocus(stop)
+        if changed { stepHaptic.selectionChanged() }
+        return stop
+    }
+
+    static func guitarLevel(_ focus: Double) -> Double { focus >= 0 ? 1 : 1 + focus }
+    static func bandLevel(_ focus: Double) -> Double { focus <= 0 ? 1 : 1 - focus }
+
+    private func applyFocus() {
+        let guitar = Float(Self.guitarLevel(focus))
+        let band = Float(Self.bandLevel(focus))
+        for name in player.stemNames {
+            player.setVolume(map.guitarStems.contains(name) ? guitar : band, forStem: name)
+        }
+    }
+
+    // MARK: Speed
+
+    func setSpeed(_ value: Double, haptic: Bool = true) {
+        let clamped = (min(max(value, Self.speedRange.lowerBound), Self.speedRange.upperBound) * 100).rounded() / 100
+        if haptic, (clamped * 20).rounded() != (speed * 20).rounded() { stepHaptic.selectionChanged() }
+        speed = clamped
+        player.setRate(clamped)
+    }
+
+    /// The speed button: 100 → 85 → 70 → 55 → 100.
+    func cycleSpeed() {
+        stopRamp()
+        let steps = [1.0, 0.85, 0.7, 0.55]
+        let index = steps.firstIndex { abs($0 - speed) < 0.01 } ?? -1
+        setSpeed(steps[(index + 1) % steps.count])
+    }
+
+    func setRamping(_ on: Bool) {
+        ramping = on
+        lapsAtThisSpeed = 0
+        if on {
+            if speed >= 1 { setSpeed(0.6, haptic: false) }
+            if !player.isPlaying { togglePlay() }
+            fx.banner("\(Int((speed * 100).rounded()))%")
+        }
+    }
+
+    func stopRamp() {
+        if ramping { setRamping(false) }
+    }
+
+    // MARK: The ring
+
+    /// Catches `region` in the ring: it repeats until released.
+    func catchRiff(_ region: LoopRegion, animated: Bool = true) {
+        loop = region
+        laps = 0
+        lapsAtThisSpeed = 0
+        player.setLoop(region)
+        player.setLoopEnabled(true)
+        player.seek(to: region.start)
+        lastTime = region.start
+        fx.setRing(true, animated: animated)
+        if animated {
+            if speed > 0.7 { setSpeed(0.7, haptic: false) }
+            if !player.isPlaying { togglePlay() }
+            bigHaptic.impactOccurred()
+        }
+    }
+
+    func releaseRiff() {
+        stopRamp()
+        player.setLoop(nil)
+        loop = nil
+        fx.setRing(false, animated: true)
+    }
+
+    /// A loop from a drag on the tape, snapped to beats (at least one beat long).
+    func region(from a: Seconds, to b: Seconds) -> LoopRegion? {
+        let lo = min(a, b), hi = max(a, b)
+        let start = map.beats.isEmpty ? lo : map.beat(atOrBefore: lo + 0.01)
+        var end = map.beats.isEmpty ? hi : map.snapToBeat(hi)
+        let minimum = map.beatLength ?? 0.5
+        if end - start < minimum { end = start + minimum }
+        return LoopRegion(start: start, end: end, duration: duration)
+    }
+
+    // MARK: Frame tick
+
+    private func tick() {
+        let now = player.currentTime
+        defer { lastTime = now }
+        guard player.isPlaying else { return }
+        var hits: [Seconds] = []
+        if let loop, now < lastTime - loop.length / 2 {
+            completedLap()
+            hits = Array(map.attacks(after: lastTime, upTo: loop.end)) + Array(map.attacks(after: loop.start - 0.001, upTo: now))
+        } else if now > lastTime, now - lastTime < 0.25 {
+            hits = Array(map.attacks(after: lastTime, upTo: now))
+        }
+        guard !hits.isEmpty, Self.guitarLevel(focus) > 0.2 else { return }
+        for t in hits.prefix(6) { fx.spark(strength: Double(map.guitarLevel(at: t))) }
+    }
+
+    private func completedLap() {
+        laps += 1
+        lapHaptic.impactOccurred(intensity: 0.6)
+        guard ramping else { return }
+        lapsAtThisSpeed += 1
+        guard lapsAtThisSpeed >= Self.lapsPerStep else { return }
+        lapsAtThisSpeed = 0
+        setSpeed(speed + Self.rampStep, haptic: false)
+        bigHaptic.impactOccurred()
+        if speed >= 1 {
+            ramping = false
+            fx.banner("VELOCIDADE REAL", burst: true)
+        } else {
+            fx.banner("\(Int((speed * 100).rounded()))%")
+        }
+    }
+}
+
+/// Frame-rate visual state shared between the model's tick and the canvas.
+final class ArenaFX {
+    struct Particle {
+        var x, y, vx, vy, life, radius: Double
+        var hot: Bool
+    }
+
+    /// Sparks waiting to be emitted at the playhead (the canvas knows where that is).
+    var pendingSparks: [Double] = []
+    var pendingBurst = false
+    var particles: [Particle] = []
+    var bannerText = ""
+    var bannerLife = 0.0
+    var shake = 0.0
+    /// 0 = tape, 1 = ring; eases toward `ringTarget`.
+    var ring = 0.0
+    var ringTarget = 0.0
+    /// The loop still being drawn while the ring unrolls after a release.
+    var lastLoop: LoopRegion?
+
+    func setRing(_ on: Bool, animated: Bool) {
+        ringTarget = on ? 1 : 0
+        if !animated { ring = ringTarget }
+    }
+
+    func spark(strength: Double) { pendingSparks.append(strength) }
+
+    func banner(_ text: String, burst: Bool = false) {
+        bannerText = text
+        bannerLife = 1
+        shake = 0.6
+        if burst { pendingBurst = true }
+    }
+}

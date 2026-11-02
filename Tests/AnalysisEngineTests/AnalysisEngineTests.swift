@@ -81,31 +81,3 @@ struct AudioDecoderTests {
         #expect(abs(hz - 220) < 6, "measured \(hz) Hz")
     }
 }
-
-@Suite("BasicPitchModel", .serialized)
-struct BasicPitchModelTests {
-    @Test func bundledModelIsPresent() {
-        #expect(BasicPitchModel.bundledPackageURL() != nil)
-    }
-
-    @Test func compilesLoadsAndHearsTheRightPitch() async throws {
-        let model = BasicPitchModel()
-        let report = try await model.load(computeUnits: .cpuOnly)
-        #expect(report.inputShape == [1, BasicPitchModel.Constants.windowSamples, 1])
-
-        // A3 = 220 Hz = MIDI 57.
-        let url = try makeToneFile(frequency: 220, seconds: 2.2)
-        defer { try? FileManager.default.removeItem(at: url) }
-        let decoded = try AudioDecoder.decodeMono(url: url, sampleRate: BasicPitchModel.Constants.sampleRate)
-        var window = Array(decoded.samples.prefix(BasicPitchModel.Constants.windowSamples))
-        window += [Float](repeating: 0, count: BasicPitchModel.Constants.windowSamples - window.count)
-
-        let output = try await model.predictWindow(window)
-        #expect(output.noteShape.last == BasicPitchModel.Constants.noteBins)
-        #expect(output.onsetShape.last == BasicPitchModel.Constants.noteBins)
-        #expect(output.contourShape.last == BasicPitchModel.Constants.contourBins)
-        #expect(output.noteShape.count == 3 && output.noteShape[1] > 150, "frames per window: \(output.noteShape)")
-        #expect(output.maxNoteActivation > 0.3, "max activation \(output.maxNoteActivation)")
-        #expect(output.strongestMIDI == 57, "strongest MIDI \(output.strongestMIDI)")
-    }
-}

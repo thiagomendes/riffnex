@@ -92,3 +92,15 @@ struct RiffMapBuilderTests {
         #expect(RiffMapBuilder.bars(fromBeats: [0, 1, 2, 3, 4, 5, 6, 7, 8]) == [0, 4, 8])
     }
 }
+
+@Suite("Guitar stems")
+struct GuitarStemsTests {
+    @Test func guitarAloneWhenItIsLoudest() {
+        #expect(RiffMapBuilder.guitarStems(energy: ["guitar": 0.5, "piano": 0.1, "other": 0.2]) == ["guitar"])
+    }
+
+    @Test func louderPitchedStemsJoin() {
+        #expect(RiffMapBuilder.guitarStems(energy: ["guitar": 0.1, "piano": 0.3, "other": 0.05]) == ["guitar", "piano"])
+        #expect(RiffMapBuilder.guitarStems(energy: [:]) == ["guitar"])
+    }
+}

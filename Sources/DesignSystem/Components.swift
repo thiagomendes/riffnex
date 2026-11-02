@@ -86,7 +86,7 @@ public struct RXStatusPill: View {
     private var tint: Color {
         switch kind {
         case .neutral: RX.Palette.textSecondary
-        case .running: RX.Palette.blue
+        case .running: RX.Palette.cyan
         case .success: RX.Palette.success
         case .warning: RX.Palette.warning
         case .failure: RX.Palette.error
@@ -102,7 +102,7 @@ public struct RXBackground: View {
         ZStack {
             RX.Palette.base
             RadialGradient(
-                colors: [RX.Palette.violet.opacity(0.16), .clear],
+                colors: [RX.Palette.magenta.opacity(0.14), .clear],
                 center: UnitPoint(x: 0.3, y: 0.0), startRadius: 0, endRadius: 520
             )
         }

@@ -227,3 +227,17 @@ public enum RiffMapBuilder {
         stride(from: 0, to: beats.count, by: max(1, beatsPerBar)).map { beats[$0] }
     }
 }
+
+extension RiffMapBuilder {
+    /// Which separated instruments count as "the guitar". The separator sometimes hears a guitar
+    /// as piano or "other" (clean or synth-like tones), so a pitched stem louder than the guitar
+    /// stem joins it; the guitar stem itself is always included.
+    public static func guitarStems(energy: [String: Double]) -> [String] {
+        let guitar = energy["guitar"] ?? 0
+        var stems = ["guitar"]
+        for name in ["piano", "other"] where (energy[name] ?? 0) > guitar && (energy[name] ?? 0) > 0 {
+            stems.append(name)
+        }
+        return stems
+    }
+}

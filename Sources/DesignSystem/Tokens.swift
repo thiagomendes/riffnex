@@ -6,34 +6,32 @@ public enum RX {
     // MARK: Color
 
     public enum Palette {
-        public static let base = Color(hex: 0x07070A)
-        public static let surface = Color(hex: 0x0E0F14)
-        public static let raised = Color(hex: 0x161721)
-        public static let hairline = Color.white.opacity(0.08)
+        // Arena: deep violet-black, the guitar burns orange, the band glows cyan.
+        public static let base = Color(hex: 0x07060F)
+        public static let surface = Color(hex: 0x0F0C22)
+        public static let raised = Color(hex: 0x1A1438)
+        public static let hairline = Color(hex: 0x2C2650)
 
-        public static let textPrimary = Color(hex: 0xF4F4F7)
-        public static let textSecondary = Color(hex: 0xF4F4F7).opacity(0.64)
-        public static let textTertiary = Color(hex: 0xF4F4F7).opacity(0.40)
+        public static let textPrimary = Color(hex: 0xF4F1FF)
+        public static let textSecondary = Color(hex: 0xF4F1FF).opacity(0.62)
+        public static let textTertiary = Color(hex: 0xF4F1FF).opacity(0.38)
 
-        /// "Riff": brand, primary actions, upcoming notes.
-        public static let violet = Color(hex: 0x7C5CFF)
-        /// "Pulse": timeline, playhead, loop region.
-        public static let blue = Color(hex: 0x3D7BFF)
-        /// "Signal": sounding now.
-        public static let cyan = Color(hex: 0x3FE0E8)
+        /// The guitar.
+        public static let fire = Color(hex: 0xFF6A2B)
+        public static let fireLight = Color(hex: 0xFFC23D)
+        /// The rest of the band.
+        public static let cyan = Color(hex: 0x33E1FF)
+        /// Arena light, playhead glow, active controls.
+        public static let magenta = Color(hex: 0xFF3D9A)
+        public static let violet = Color(hex: 0x6D2BFF)
 
         public static let success = Color(hex: 0x4ADE9B)
         public static let warning = Color(hex: 0xF5B946)
         public static let error = Color(hex: 0xFF5C6C)
-
-        public static let fretboardTop = Color(hex: 0x121219)
-        public static let fretboardBottom = Color(hex: 0x0B0B10)
-        public static let fret = Color(hex: 0x8E93A6).opacity(0.55)
-        public static let string = Color(hex: 0xC9CCD8)
     }
 
     public static let brandGradient = LinearGradient(
-        colors: [Palette.violet, Palette.blue, Palette.cyan],
+        colors: [Palette.fireLight, Palette.fire, Palette.magenta],
         startPoint: .leading, endPoint: .trailing
     )
 
@@ -96,13 +94,13 @@ public extension Font {
         .system(style, design: .default, weight: .bold).width(.expanded)
     }
 
-    /// Chord symbols: rounded, legible from a music stand.
-    static func rxChord(_ style: Font.TextStyle = .title2) -> Font {
-        .system(style, design: .rounded, weight: .semibold)
+    /// HUD labels: small, wide, tracked caps.
+    static func rxHUD(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
+        .system(size: size, weight: weight, design: .default).width(.expanded)
     }
 
-    /// Tablature digits.
-    static func rxTab(_ style: Font.TextStyle = .body) -> Font {
-        .system(style, design: .monospaced, weight: .medium)
+    /// Big arena numbers (laps, speed).
+    static func rxBig(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .black, design: .rounded).width(.expanded)
     }
 }

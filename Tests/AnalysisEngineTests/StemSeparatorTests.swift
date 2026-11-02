@@ -83,18 +83,30 @@ struct DemucsSpectrogramTests {
 
 @Suite("Stem separation on the demo", .serialized)
 struct StemSeparatorTests {
+    /// Runs the whole preparation once (separation is the slow part) and checks both the stems
+    /// against the PyTorch reference and the measurements built from them.
     @Test(.timeLimit(.minutes(10)))
-    func separatesLikeTheReference() async throws {
+    func preparesTheDemoLikeTheReference() async throws {
         guard StemSeparator.isAvailable else {
             Issue.record("separation model not bundled")
             return
         }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("stems-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
-        let separator = StemSeparator()
-        let result = try await separator.separate(fileURL: SeparationFixtures.demo, into: directory, computeUnits: .cpuOnly) { _ in }
-        print("[separation] \(String(format: "%.1f", result.duration)) s of audio in \(String(format: "%.1f", result.seconds)) s; per segment \(result.segmentSeconds.map { String(format: "%.2f", $0) })")
-        #expect(result.stems.count == 6)
+        let map = try await RiffPreparer().prepare(fileURL: SeparationFixtures.demo, stemsDirectory: directory,
+                                                   directoryName: "Stems", computeUnits: .cpuOnly) { _ in }
+        print("[prepare] \(String(format: "%.1f", map.duration)) s separated in \(String(format: "%.1f", map.separationSeconds)) s; guitar = \(map.guitarStems), \(map.guitarAttacks.count) attacks, \(map.beats.count) beats, notes \(map.notes)")
+        #expect(map.stemNames.count == 6)
+        #expect(abs(map.duration - 21.5) < 0.3)
+        #expect(map.guitar.count == map.band.count)
+        #expect(abs(Double(map.guitar.count) / map.envelopeRate - map.duration) < 0.1)
+        #expect(map.guitar.contains { $0 > 0.3 })
+        #expect(map.guitar.allSatisfy { $0 >= 0 && $0 <= 1 } && map.band.allSatisfy { $0 >= 0 && $0 <= 1 })
+        // The demo riff is mostly eighth notes at 96 BPM: well over a hundred attacks in 21 s.
+        #expect(map.guitarAttacks.count > 60, "attacks: \(map.guitarAttacks.count)")
+        let result = (duration: map.duration, stems: Dictionary(uniqueKeysWithValues: map.stemNames.map {
+            ($0, directory.appendingPathComponent("\($0).m4a"))
+        }))
 
         let reference = try JSONDecoder().decode(SeparationFixtures.Envelopes.self, from: Data(contentsOf: SeparationFixtures.envelopes))
         for (name, url) in result.stems.sorted(by: { $0.key < $1.key }) {
@@ -146,27 +158,6 @@ struct StemSeparatorTests {
             db += (y - mb) * (y - mb)
         }
         return num / max((da * db).squareRoot(), 1e-12)
-    }
-}
-
-@Suite("Analysis with separation", .serialized)
-struct SeparatedAnalysisTests {
-    @Test(.timeLimit(.minutes(10)))
-    func notesComeFromPitchedStems() async throws {
-        guard StemSeparator.isAvailable else { return }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("stems-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let coordinator = AnalysisCoordinator()
-        let analysis = try await coordinator.analyze(
-            fileURL: SeparationFixtures.demo,
-            options: .init(computeUnits: .cpuOnly, runMusicUnderstanding: false, stemsDirectory: directory)) { _ in }
-        let stems = try #require(analysis.stems)
-        print("[separated analysis] sources \(stems.noteSources), share \(stems.energyShare.mapValues { (($0 * 100).rounded()) / 100 }), notes \(analysis.notes.count), chords \(analysis.chords.compactMap { $0.chord?.symbol() }), timings \(analysis.timings.map { "\($0.stage)=\(String(format: "%.1f", $0.seconds))" })")
-        #expect(stems.names.count == 6)
-        #expect(!stems.noteSources.contains("vocals") && !stems.noteSources.contains("drums"))
-        #expect(analysis.notes.count > 30)
-        #expect(analysis.components.contains { $0.component == .stemSeparator })
-        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("guitar.m4a").path))
     }
 }
 

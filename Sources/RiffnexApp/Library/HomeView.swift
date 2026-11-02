@@ -17,7 +17,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: RX.Space.xl) {
                     header
                     if !app.isBootstrapped {
-                        ProgressView().tint(RX.Palette.violet).frame(maxWidth: .infinity).padding(.top, RX.Space.xxl)
+                        ProgressView().tint(RX.Palette.magenta).frame(maxWidth: .infinity).padding(.top, RX.Space.xxl)
                     } else if app.songs.isEmpty {
                         EmptyLibrary()
                     } else {
@@ -72,16 +72,8 @@ struct HomeView: View {
                 .foregroundStyle(RX.Palette.textSecondary)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
-            NavigationLink {
-                DiagnosticsView()
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(RX.Palette.textSecondary)
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Ajustes e diagnóstico")
         }
+        .frame(minHeight: 44)
     }
 
     private var library: some View {
@@ -93,7 +85,8 @@ struct HomeView: View {
             LazyVStack(spacing: RX.Space.xs) {
                 ForEach(app.songs) { song in
                     Button { path.append(song) } label: {
-                        SongRow(song: song, waveform: app.waveforms[song.id], artworkURL: app.artworkURL(for: song))
+                        SongRow(song: song, waveform: app.waveforms[song.id], artworkURL: app.artworkURL(for: song),
+                                status: app.prep.status(for: song.id))
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
@@ -216,6 +209,7 @@ private struct SongRow: View {
     let song: SongRecord
     let waveform: WaveformOverview?
     let artworkURL: URL?
+    let status: PrepCenter.Status
 
     var body: some View {
         HStack(spacing: RX.Space.s) {
@@ -229,16 +223,17 @@ private struct SongRow: View {
                         .lineLimit(1)
                     if song.isDemo {
                         Text("DEMO")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(RX.Palette.violet)
+                            .font(.rxHUD(9))
+                            .foregroundStyle(RX.Palette.magenta)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Capsule().fill(RX.Palette.violet.opacity(0.16)))
+                            .background(RoundedRectangle(cornerRadius: 3).fill(RX.Palette.magenta.opacity(0.16)))
                     }
                 }
                 Text([song.artist, TimeFormatting.clock(song.duration)].compactMap { $0 }.joined(separator: " · "))
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(RX.Palette.textSecondary)
                     .lineLimit(1)
+                statusLine
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
@@ -247,8 +242,25 @@ private struct SongRow: View {
         }
         .padding(RX.Space.s)
         .background(RoundedRectangle(cornerRadius: RX.Radius.control, style: .continuous).fill(RX.Palette.surface))
+        .overlay(RoundedRectangle(cornerRadius: RX.Radius.control, style: .continuous).strokeBorder(RX.Palette.hairline))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var statusLine: some View {
+        switch status {
+        case .ready:
+            Label("Guitarra separada", systemImage: "checkmark").font(.rxHUD(9)).foregroundStyle(RX.Palette.cyan)
+        case .running(let job):
+            Text("SEPARANDO \(Int(job.fraction * 100))%").font(.rxHUD(9).monospacedDigit()).foregroundStyle(RX.Palette.fireLight)
+        case .queued:
+            Text("NA FILA").font(.rxHUD(9)).foregroundStyle(RX.Palette.textTertiary)
+        case .failed:
+            Text("NÃO DEU CERTO · TOQUE PARA TENTAR").font(.rxHUD(9)).foregroundStyle(RX.Palette.error)
+        case .none:
+            Text("TOQUE PARA SEPARAR A GUITARRA").font(.rxHUD(9)).foregroundStyle(RX.Palette.textTertiary)
+        }
     }
 }
 

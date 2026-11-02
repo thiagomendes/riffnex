@@ -187,6 +187,9 @@ public actor StemSeparator {
         var reconstruction = [Float](repeating: 0, count: segment)
 
         for (index, offset) in offsets.enumerated() {
+          // Core ML returns autoreleased buffers (tens of MB per segment). Without a pool per
+          // segment they pile up until the whole song is done, and iOS kills the app on long songs.
+          try autoreleasepool {
             try Task.checkCancellation()
             let segmentStart = clock.now
             try flush(upTo: offset)
@@ -246,6 +249,7 @@ public actor StemSeparator {
 
             segmentTimes.append((clock.now - segmentStart).seconds)
             progress(Progress(fraction: Double(index + 1) / Double(offsets.count), segment: index + 1, segments: offsets.count))
+          }
         }
         try flush(upTo: total)
 

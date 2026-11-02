@@ -9,10 +9,8 @@ import os
 /// The song is either the original mix (one track) or its separated instruments (one track
 /// per stem, each with its own volume), started together at a shared host time.
 ///
-/// Graph: `AVAudioPlayerNode ─┐
-///         metronome source ──┴→ mixer → AVAudioUnitTimePitch → mainMixer`.
-/// The metronome renders in song frames next to the player, so its clicks follow seeks, loops
-/// and speed changes exactly. The player node always renders
+/// Graph: `AVAudioPlayerNode(s) → mixer → AVAudioUnitTimePitch → mainMixer`.
+/// The player node always renders
 /// source frames, so its sample time maps directly to a file position through `PlaybackPosition`,
 /// whatever the speed. Loops are gapless because the next two iterations are always queued ahead.
 ///
@@ -28,10 +26,6 @@ public final class AudioPlayer {
     public private(set) var loop: LoopRegion?
     public private(set) var loopEnabled = false
     public private(set) var lastError: String?
-    public private(set) var metronomeEnabled = false
-    public private(set) var countInEnabled = false
-    /// Whether a beat grid is available (metronome and count-in need one).
-    public private(set) var hasBeatGrid = false
     /// Separated instruments currently loaded (empty when playing the original mix).
     public private(set) var stemNames: [String] = []
     public private(set) var stemVolumes: [String: Float] = [:]
@@ -55,11 +49,7 @@ public final class AudioPlayer {
     private let player = AVAudioPlayerNode()
     private let timePitch = AVAudioUnitTimePitch()
     private let songMixer = AVAudioMixerNode()
-    @ObservationIgnored private var clickNode: AVAudioSourceNode?
-    @ObservationIgnored private let metronome = MetronomeBox()
-    @ObservationIgnored private var beatTimes: [Seconds] = []
-    @ObservationIgnored private var barTimes: [Seconds] = []
-    /// Silent frames before the first scheduled segment (the count-in).
+    /// Player samples before the first scheduled segment (the shared start pre-roll of stems).
     @ObservationIgnored private var leadFrames: Int64 = 0
     @ObservationIgnored private var tracks: [Track] = []
     @ObservationIgnored private var stemNodes: [String: AVAudioPlayerNode] = [:]
@@ -98,10 +88,6 @@ public final class AudioPlayer {
         engine.disconnectNodeOutput(player)
         engine.disconnectNodeOutput(songMixer)
         engine.disconnectNodeOutput(timePitch)
-        if let old = clickNode {
-            engine.disconnectNodeOutput(old)
-            engine.detach(old)
-        }
 
         var newTracks: [Track] = []
         if stems.isEmpty {
@@ -115,16 +101,11 @@ public final class AudioPlayer {
             }
         }
         let format = newTracks[0].file.processingFormat
-        metronome.reset(sampleRate: format.sampleRate)
-        let click = metronome.makeNode(format: format)
-        engine.attach(click)
-        clickNode = click
         // iOS 27 replaced the non-throwing connect/play with throwing variants that report failures.
         // Mixer inputs: each connection takes the next free input bus.
         for track in newTracks {
             try engine.connectNode(track.node, to: songMixer, format: track.file.processingFormat)
         }
-        try engine.connectNode(click, to: songMixer, format: format)
         try engine.connectNode(songMixer, to: timePitch, format: format)
         try engine.connectNode(timePitch, to: engine.mainMixerNode, format: format)
         engine.prepare()
@@ -143,9 +124,6 @@ public final class AudioPlayer {
         loopEnabled = false
         practiceAccumulator = 0
         leadFrames = 0
-        beatTimes = []
-        barTimes = []
-        hasBeatGrid = false
         nowPlayingTitle = title
         nowPlayingArtist = artist
         isLoaded = true
@@ -194,7 +172,7 @@ public final class AudioPlayer {
            Double(pausedFrame) / sampleRate >= loop.end {
             pausedFrame = frame(for: loop.start)
         }
-        schedule(from: pausedFrame, countIn: countInEnabled)
+        schedule(from: pausedFrame)
         guard startNode() else { return }
         isPlaying = true
         playStartedAt = ContinuousClock.now
@@ -254,51 +232,14 @@ public final class AudioPlayer {
         }
     }
 
-    // MARK: Metronome
-
-    /// Beat and bar times (seconds) from the analysis; without them the metronome stays off.
-    public func setBeatGrid(beats: [Seconds], bars: [Seconds]) {
-        beatTimes = beats
-        barTimes = bars
-        hasBeatGrid = beats.count >= 2
-        metronome.setGrid(MetronomeRenderer.Grid(beatTimes: beats, barTimes: bars, sampleRate: sampleRate))
-        if !hasBeatGrid {
-            setMetronomeEnabled(false)
-            countInEnabled = false
+    /// Wall-clock seconds played since the last `takePracticedSeconds()`, without resetting.
+    public var pendingPracticedSeconds: Double {
+        var total = practiceAccumulator
+        if isPlaying, let started = playStartedAt {
+            let elapsed = ContinuousClock.now - started
+            total += Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
         }
-    }
-
-    public func setMetronomeEnabled(_ enabled: Bool) {
-        metronomeEnabled = enabled && hasBeatGrid
-        metronome.setEnabled(metronomeEnabled)
-    }
-
-    public func setCountInEnabled(_ enabled: Bool) {
-        countInEnabled = enabled && hasBeatGrid
-    }
-
-    /// While a count-in is sounding: beats left before the song starts (e.g. 4, 3, 2, 1).
-    public var countInBeatsRemaining: Int? {
-        guard isPlaying, leadFrames > 0, let primary = tracks.first?.node, let nodeTime = primary.lastRenderTime,
-              let playerTime = primary.playerTime(forNodeTime: nodeTime) else { return nil }
-        let remaining = leadFrames - playerTime.sampleTime
-        guard remaining > 0, let interval = beatIntervalFrames, interval > 0 else { return nil }
-        return Int((remaining + interval - 1) / interval)
-    }
-
-    private var beatIntervalFrames: Int64? {
-        let intervals = zip(beatTimes.dropFirst(), beatTimes).map { $0 - $1 }.filter { $0 > 0 }.sorted()
-        guard !intervals.isEmpty else { return nil }
-        return Int64((intervals[intervals.count / 2] * sampleRate).rounded())
-    }
-
-    /// Beats in a bar, from the bar grid (defaults to 4).
-    private var beatsPerBar: Int {
-        guard barTimes.count >= 2 else { return 4 }
-        let first = barTimes[0]
-        let second = barTimes[1]
-        let count = beatTimes.filter { $0 >= first - 0.03 && $0 < second - 0.03 }.count
-        return (2...7).contains(count) ? count : 4
+        return total
     }
 
     /// Wall-clock seconds spent playing since the last call. Includes the current run if playing.
@@ -332,7 +273,7 @@ public final class AudioPlayer {
             let latency = session.outputLatency + session.ioBufferDuration
             rendered -= Int64(latency * sampleRate * rate)
         }
-        rendered = max(0, rendered) // during the count-in, stay at the start position
+        rendered = max(0, rendered) // during the start pre-roll, stay at the start position
         return PlaybackPosition.fileFrame(renderedFrames: rendered, startFrame: startFrame,
                                           loop: activeFrameLoop, fileLength: fileLength)
     }
@@ -340,7 +281,6 @@ public final class AudioPlayer {
     private func haltPlayer() {
         generation += 1 // completion handlers from the old schedule become no-ops
         for track in tracks { track.node.stop() }
-        metronome.stop()
     }
 
     private func rescheduleIfPlaying() {
@@ -363,38 +303,22 @@ public final class AudioPlayer {
         }
     }
 
-    private func schedule(from frame: Int64, countIn: Bool = false) {
+    private func schedule(from frame: Int64) {
         guard !tracks.isEmpty else { return }
         haltPlayer()
         let current = generation
         startFrame = min(max(0, frame), fileLength)
 
-        // Count-in: the metronome clicks one bar first; the song's first segment waits for it.
-        var countInBeats = 0
-        var interval: Int64 = 0
-        if countIn, let beat = beatIntervalFrames, beat > 0 {
-            countInBeats = beatsPerBar
-            interval = beat
-        }
-        let countInFrames = Int64(countInBeats) * interval
-        let loopFrames = activeFrameLoop.map { ($0.start, $0.end) }
         let firstAt: AVAudioTime?
         if tracks.count == 1 {
-            // One track: delay it on its own timeline; the metronome starts in the same render cycle.
-            leadFrames = countInFrames
-            metronome.start(at: startFrame, loop: loopFrames, countInBeats: countInBeats, interval: interval, startHost: nil, rate: rate)
-            firstAt = leadFrames > 0 ? AVAudioTime(sampleTime: leadFrames, atRate: sampleRate) : nil
+            leadFrames = 0
+            firstAt = nil
         } else {
-            // Several stems: every track (and the metronome) starts at one shared host time, so they
-            // stay sample-aligned even if the render thread runs between the individual starts.
+            // Several stems: every track starts at one shared host time, so they stay sample-aligned
+            // even if the render thread runs between the individual starts.
             let preroll = 0.08
-            let leadSeconds = preroll + Double(countInFrames) / (sampleRate * rate)
-            let startHost = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: leadSeconds)
-            leadFrames = Int64((leadSeconds * sampleRate * rate).rounded()) // in player samples, for the clock
-            metronome.start(at: startFrame, loop: loopFrames, countInBeats: countInBeats, interval: interval,
-                            startHost: AVAudioTime.hostTime(forSeconds: AVAudioTime.seconds(forHostTime: startHost)
-                                                            - Double(countInFrames) / (sampleRate * rate)),
-                            rate: rate)
+            let startHost = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: preroll)
+            leadFrames = Int64((preroll * sampleRate * rate).rounded()) // in player samples, for the clock
             firstAt = AVAudioTime(hostTime: startHost)
         }
 
@@ -537,68 +461,5 @@ public final class AudioPlayer {
         ]
         if let nowPlayingArtist { info[MPMediaItemPropertyArtist] = nowPlayingArtist }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-    }
-}
-
-/// Thread-safe holder of the metronome renderer, shared between the main actor (transport) and
-/// the audio render thread. The lock is held only for the few microseconds a buffer takes.
-final class MetronomeBox: @unchecked Sendable {
-    private struct State {
-        var renderer: MetronomeRenderer
-        var scratch = [Float](repeating: 0, count: 4096)
-        /// When set, the first render computes how many frames of silence precede this host time.
-        var startHost: UInt64?
-        var rate: Double = 1
-    }
-
-    private let lock = OSAllocatedUnfairLock(initialState: State(renderer: MetronomeRenderer(sampleRate: 44_100)))
-
-    func reset(sampleRate: Double) {
-        lock.withLock { $0 = State(renderer: MetronomeRenderer(sampleRate: sampleRate)) }
-    }
-
-    func setGrid(_ grid: MetronomeRenderer.Grid) { lock.withLock { $0.renderer.grid = grid } }
-    func setEnabled(_ enabled: Bool) { lock.withLock { $0.renderer.enabled = enabled } }
-    func stop() { lock.withLock { $0.renderer.stop() } }
-
-    /// `startHost`: host time at which the first click (count-in or song) must sound; nil = now.
-    func start(at frame: Int64, loop: (Int64, Int64)?, countInBeats: Int, interval: Int64, startHost: UInt64?, rate: Double) {
-        lock.withLock { state in
-            state.renderer.start(at: frame, loop: loop.map { (start: $0.0, end: $0.1) },
-                                 countInBeats: countInBeats, interval: interval)
-            state.startHost = startHost
-            state.rate = rate
-        }
-    }
-
-    func makeNode(format: AVAudioFormat) -> AVAudioSourceNode {
-        let sampleRate = format.sampleRate
-        return AVAudioSourceNode(format: format) { [self] isSilence, timestamp, frameCount, bufferList -> OSStatus in
-            let count = Int(frameCount)
-            let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
-            let bufferHost = timestamp.pointee.mHostTime
-            // Unchecked: the closure touches the render buffers (non-Sendable pointers), synchronously.
-            lock.withLockUnchecked { state in
-                if let startHost = state.startHost, bufferHost > 0 {
-                    // This node renders song frames at `rate` × real time (it sits before the time-pitch unit).
-                    let seconds = startHost > bufferHost ? AVAudioTime.seconds(forHostTime: startHost - bufferHost) : 0
-                    state.renderer.delay(frames: Int64((seconds * sampleRate * state.rate).rounded()))
-                    state.startHost = nil
-                }
-                state.renderer.render(count, into: &state.scratch)
-                var silent = true
-                for buffer in buffers {
-                    guard let data = buffer.mData?.assumingMemoryBound(to: Float.self) else { continue }
-                    let channels = max(Int(buffer.mNumberChannels), 1)
-                    for i in 0..<count {
-                        let value = state.scratch[i]
-                        if value != 0 { silent = false }
-                        for c in 0..<channels { data[i * channels + c] = value }
-                    }
-                }
-                isSilence.pointee = ObjCBool(silent)
-            }
-            return noErr
-        }
     }
 }

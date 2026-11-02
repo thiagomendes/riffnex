@@ -25,7 +25,7 @@ final class AppModel {
 
     let player = AudioPlayer()
     let store: LibraryStore
-    let analysis: AnalysisCenter
+    let prep: PrepCenter
 
     @ObservationIgnored private var importTask: Task<Void, Never>?
     private let log = Logger(subsystem: RXLog.subsystem, category: "library")
@@ -35,7 +35,7 @@ final class AppModel {
                                                  appropriateFor: nil, create: true))
             ?? FileManager.default.temporaryDirectory
         store = LibraryStore(rootURL: base.appendingPathComponent("Library", isDirectory: true))
-        analysis = AnalysisCenter(store: store)
+        prep = PrepCenter(store: store)
     }
 
     /// The most recently opened song, for "Continuar praticando".
@@ -61,6 +61,7 @@ final class AppModel {
     private func refresh() async {
         let all = await store.songs
         songs = all.sorted { $0.importedAt > $1.importedAt }
+        for song in all { await prep.load(song.id) }
         for song in all where waveforms[song.id] == nil {
             waveforms[song.id] = await store.waveform(for: song.id)
         }
@@ -136,7 +137,7 @@ final class AppModel {
 
     func delete(_ song: SongRecord) async {
         do {
-            analysis.forget(song.id)
+            prep.forget(song.id)
             try await store.remove(song.id)
             waveforms[song.id] = nil
             await refresh()
@@ -160,12 +161,10 @@ final class AppModel {
 
     func audioURL(for song: SongRecord) -> URL { store.audioURL(for: song) }
 
-    /// The separated instruments of an analyzed song, in a fixed, friendly order, if they exist on disk.
-    func stemSources(for song: SongRecord) -> [AudioPlayer.StemSource] {
-        guard let stems = analysis.analyses[song.id]?.stems else { return [] }
-        let folder = store.folder(for: song.id).appendingPathComponent(stems.directory, isDirectory: true)
-        let order = ["guitar", "bass", "drums", "vocals", "piano", "other"]
-        let sources = order.filter(stems.names.contains).map {
+    /// The separated instruments of a prepared song, if they are on disk.
+    func stemSources(for song: SongRecord, map: RiffMap) -> [AudioPlayer.StemSource] {
+        let folder = store.folder(for: song.id).appendingPathComponent(map.stemsDirectory, isDirectory: true)
+        let sources = map.stemNames.map {
             AudioPlayer.StemSource(name: $0, url: folder.appendingPathComponent("\($0).m4a"))
         }
         guard sources.allSatisfy({ FileManager.default.fileExists(atPath: $0.url.path) }) else { return [] }
