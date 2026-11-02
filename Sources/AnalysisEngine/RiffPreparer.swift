@@ -69,15 +69,10 @@ public actor RiffPreparer {
         for (index, name) in names.enumerated() {
             try Task.checkCancellation()
             guard let url = separation.stems[name] else { continue }
-            try autoreleasepool {
-                let mono = try AudioDecoder.decodeMono(url: url, sampleRate: Self.measureSampleRate).samples
-                drawn[name] = RiffMapBuilder.rms(mono, sampleRate: Self.measureSampleRate, rate: Self.envelopeRate)
-                if ["guitar", "piano", "other"].contains(name) {
-                    fine[name] = RiffMapBuilder.rms(mono, sampleRate: Self.measureSampleRate, rate: Self.attackRate)
-                }
-                let sumOfSquares = mono.reduce(Float(0)) { $0 + $1 * $1 }
-                energy[name] = mono.isEmpty ? 0 : Double(sumOfSquares) / Double(mono.count)
-            }
+            let measured = try Self.measure(url, fine: ["guitar", "piano", "other"].contains(name))
+            drawn[name] = measured.drawn
+            if let f = measured.fine { fine[name] = f }
+            energy[name] = measured.energy
             onUpdate(Update(stage: .measuring, fraction: Double(index + 1) / Double(names.count)))
         }
 
@@ -102,6 +97,17 @@ public actor RiffPreparer {
                           stemNames: names, guitarStems: guitarStems, separationSeconds: separation.seconds, notes: notes)
         Self.log.info("Prepared: \(separation.duration, privacy: .public)s, \(attacks.count) attacks, \(beats.count) beats, guitar = \(guitarStems, privacy: .public)")
         return map
+    }
+
+    /// Loudness envelopes and mean energy of one separated instrument.
+    static func measure(_ url: URL, fine: Bool) throws -> (drawn: [Float], fine: [Float]?, energy: Double) {
+        try autoreleasepool {
+            let mono = try AudioDecoder.decodeMono(url: url, sampleRate: measureSampleRate).samples
+            let drawn = RiffMapBuilder.rms(mono, sampleRate: measureSampleRate, rate: envelopeRate)
+            let detailed = fine ? RiffMapBuilder.rms(mono, sampleRate: measureSampleRate, rate: attackRate) : nil
+            let sumOfSquares = mono.reduce(Float(0)) { $0 + $1 * $1 }
+            return (drawn, detailed, mono.isEmpty ? 0 : Double(sumOfSquares) / Double(mono.count))
+        }
     }
 
     struct UnderstandingOutcome: Sendable {

@@ -187,9 +187,6 @@ public actor StemSeparator {
         var reconstruction = [Float](repeating: 0, count: segment)
 
         for (index, offset) in offsets.enumerated() {
-          // Core ML returns autoreleased buffers (tens of MB per segment). Without a pool per
-          // segment they pile up until the whole song is done, and iOS kills the app on long songs.
-          try autoreleasepool {
             try Task.checkCancellation()
             let segmentStart = clock.now
             try flush(upTo: offset)
@@ -214,15 +211,9 @@ public actor StemSeparator {
                 }
             }
 
-            let provider = try MLDictionaryFeatureProvider(dictionary: ["mix": MLFeatureValue(multiArray: mix),
-                                                                        "mag": MLFeatureValue(multiArray: mag)])
-            let output = try Self.predict(model, provider)
-            guard let timeOut = output.featureValue(for: "time")?.multiArrayValue,
-                  let specOut = output.featureValue(for: "spec")?.multiArrayValue else {
-                throw SeparationError.unexpectedOutput("faltam as saídas time/spec")
-            }
-            let timeValues = try Self.floats(timeOut, expected: sourceCount * 2 * segment)
-            let specValues = try Self.floats(specOut, expected: sourceCount * 4 * bins * frames)
+            let (timeValues, specValues) = try Self.run(model, mix: mix, mag: mag,
+                                                        timeCount: sourceCount * 2 * segment,
+                                                        specCount: sourceCount * 4 * bins * frames)
 
             let trim = delta / 2
             let base = offset - bufferStart
@@ -249,7 +240,6 @@ public actor StemSeparator {
 
             segmentTimes.append((clock.now - segmentStart).seconds)
             progress(Progress(fraction: Double(index + 1) / Double(offsets.count), segment: index + 1, segments: offsets.count))
-          }
         }
         try flush(upTo: total)
 
@@ -260,8 +250,22 @@ public actor StemSeparator {
 
     // MARK: Helpers
 
-    private nonisolated static func predict(_ model: MLModel, _ provider: any MLFeatureProvider) throws -> any MLFeatureProvider {
-        try model.prediction(from: provider)
+    /// Runs the network on one segment and copies its outputs into Swift arrays.
+    ///
+    /// Core ML hands back autoreleased buffers (tens of MB per segment). Without a pool per segment
+    /// they pile up until the whole song is done, and iOS kills the app on long songs.
+    private nonisolated static func run(_ model: MLModel, mix: MLMultiArray, mag: MLMultiArray,
+                                        timeCount: Int, specCount: Int) throws -> ([Float], [Float]) {
+        try autoreleasepool {
+            let provider = try MLDictionaryFeatureProvider(dictionary: ["mix": MLFeatureValue(multiArray: mix),
+                                                                        "mag": MLFeatureValue(multiArray: mag)])
+            let output = try model.prediction(from: provider)
+            guard let timeOut = output.featureValue(for: "time")?.multiArrayValue,
+                  let specOut = output.featureValue(for: "spec")?.multiArrayValue else {
+                throw SeparationError.unexpectedOutput("faltam as saídas time/spec")
+            }
+            return (try floats(timeOut, expected: timeCount), try floats(specOut, expected: specCount))
+        }
     }
 
     /// Dense row-major Float copy of a multi-array (float32 or float16 storage).
