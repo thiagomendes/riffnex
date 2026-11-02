@@ -3,13 +3,13 @@ name: TestFlight
 # Builds RIFFNEX on a Mac runner and uploads it to TestFlight.
 #
 # Needs four repository secrets (Settings › Secrets and variables › Actions), created by the owner:
-#   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (App Store Connect API key, role Admin or App Manager
-#   with access to cloud-managed distribution certificates) and APPLE_TEAM_ID.
-# Without them the job still builds an unsigned archive and prints what it contains (a dry run).
+#   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (App Store Connect API key, role Admin) and APPLE_TEAM_ID.
+# Without them the job still builds and checks the archive (a dry run).
 #
-# Signing: xtool generates an Xcode project; xcodebuild archives and exports it with automatic
-# signing through the API key (cloud-managed certificates), so no certificate or private key is
-# stored in the repository or the secrets.
+# How: xtool assembles the real app bundle (`xtool dev build`, the same build that installs on the
+# phone); we wrap it in an .xcarchive and let `xcodebuild -exportArchive` sign it for App Store
+# distribution with cloud-managed certificates through the API key, and upload it. No certificate
+# or private key is stored in the repository or the secrets.
 on:
   workflow_dispatch:
   push:
@@ -44,32 +44,63 @@ jobs:
           # Every upload needs a higher build number; the run number always grows.
           BUILD=$((1000 + GITHUB_RUN_NUMBER))
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist)
           echo "BUILD=$BUILD" >> "$GITHUB_ENV"
-          echo "Version $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist) ($BUILD)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Version $VERSION ($BUILD)"
 
-      - name: Generate Xcode project
+      - name: Build the app with xtool
         run: |
-          xtool dev generate-xcode-project
-          PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" -not -path "./.build/*" | head -1)
-          test -n "$PROJECT"
-          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
-          echo "Project: $PROJECT"
-          xcodebuild -list -project "$PROJECT"
-          SCHEME=$(xcodebuild -list -project "$PROJECT" -json | python3 -c 'import json,sys; d=json.load(sys.stdin)["project"]; s=d.get("schemes") or d.get("targets"); print([x for x in s if "Riffnex" in x or "riffnex" in x.lower()][0] if any("iffnex" in x for x in s) else s[0])')
-          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
-          echo "Scheme: $SCHEME"
-          xcodebuild -showBuildSettings -project "$PROJECT" -scheme "$SCHEME" -destination 'generic/platform=iOS' 2>/dev/null \
-            | grep -E " (PRODUCT_BUNDLE_IDENTIFIER|INFOPLIST_FILE|ASSETCATALOG_COMPILER_APPICON_NAME|CODE_SIGN_STYLE|DEVELOPMENT_TEAM|MARKETING_VERSION|CURRENT_PROJECT_VERSION|PRODUCT_NAME) =" || true
+          xtool dev build --configuration release
+          APP=$(find xtool -maxdepth 1 -name "*.app" | head -1)
+          test -n "$APP"
+          # Apple requires the app's privacy manifest at the bundle root.
+          cp App/PrivacyInfo.xcprivacy "$APP/"
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "App: $APP"
+          ls -la "$APP" | head -50
+          plutil -p "$APP/Info.plist"
+          du -sh "$APP"
 
-      - name: Archive (dry run, unsigned)
+      - name: Wrap it in an .xcarchive
+        run: |
+          NAME=$(basename "$APP")
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          ARCHIVE=build/RIFFNEX.xcarchive
+          mkdir -p "$ARCHIVE/Products/Applications" "$ARCHIVE/dSYMs"
+          cp -R "$APP" "$ARCHIVE/Products/Applications/"
+          # Ad-hoc signature so the bundle is well-formed; export re-signs it for distribution.
+          codesign --force --deep --sign - "$ARCHIVE/Products/Applications/$NAME"
+          cat > "$ARCHIVE/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>ApplicationProperties</key>
+            <dict>
+              <key>ApplicationPath</key><string>Applications/${NAME}</string>
+              <key>Architectures</key><array><string>arm64</string></array>
+              <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
+              <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+              <key>CFBundleVersion</key><string>${BUILD}</string>
+              <key>SigningIdentity</key><string></string>
+            </dict>
+            <key>ArchiveVersion</key><integer>2</integer>
+            <key>CreationDate</key><date>$(date -u +%Y-%m-%dT%H:%M:%SZ)</date>
+            <key>Name</key><string>RIFFNEX</string>
+            <key>SchemeName</key><string>RIFFNEX</string>
+          </dict>
+          </plist>
+          EOF
+          plutil -lint "$ARCHIVE/Info.plist"
+          echo "Bundle ID: $BUNDLE_ID"
+          find "$ARCHIVE" -maxdepth 3 | head -20
+
+      - name: Dry run note
         if: env.HAS_SECRETS != 'true'
-        run: |
-          xcodebuild archive -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath build/RIFFNEX.xcarchive \
-            CODE_SIGNING_ALLOWED=NO SKIP_INSTALL=NO INSTALL_PATH=/Applications -quiet
-          echo "::notice::TestFlight secrets are not set yet: built an unsigned archive only."
+        run: echo "::notice::TestFlight secrets are not set yet. The app and archive were built; nothing was uploaded."
 
-      - name: Archive (signed)
+      - name: Sign and upload to TestFlight
         if: env.HAS_SECRETS == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -78,37 +109,7 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
-          printf '%s' "$ASC_KEY_P8" > "$KEY_PATH"
-          echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
-          xcodebuild archive -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath build/RIFFNEX.xcarchive \
-            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic SKIP_INSTALL=NO INSTALL_PATH=/Applications \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            -quiet
-
-      - name: Add privacy manifest and inspect the app
-        run: |
-          echo "Archive contents:"
-          find build/RIFFNEX.xcarchive -maxdepth 4 | head -40
-          plutil -p build/RIFFNEX.xcarchive/Info.plist || true
-          APP=$(find build/RIFFNEX.xcarchive/Products -maxdepth 3 -name "*.app" | head -1)
-          test -n "$APP"
-          # Apple requires the app's privacy manifest at the bundle root; export re-signs the bundle.
-          cp App/PrivacyInfo.xcprivacy "$APP/"
-          echo "App: $APP"
-          ls -la "$APP" | head -40
-          plutil -p "$APP/Info.plist" | grep -E "CFBundle(Identifier|ShortVersionString|Version|Icons|DisplayName)|ITSAppUses|UIBackgroundModes|MinimumOSVersion" || true
-          ls "$APP" | grep -iE "icon|Assets.car" || echo "::warning::No app icon files found in the bundle"
-          du -sh "$APP"
-
-      - name: Export and upload to TestFlight
-        if: env.HAS_SECRETS == 'true'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -119,7 +120,7 @@ jobs:
             <key>teamID</key><string>${TEAM_ID}</string>
             <key>signingStyle</key><string>automatic</string>
             <key>manageAppVersionAndBuildNumber</key><false/>
-            <key>uploadSymbols</key><true/>
+            <key>uploadSymbols</key><false/>
           </dict>
           </plist>
           EOF
@@ -127,7 +128,7 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath build/export \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-          echo "::notice::Build $BUILD uploaded. It appears in TestFlight after Apple finishes processing (usually 10–30 min)."
+          echo "::notice::Build $VERSION ($BUILD) uploaded. It shows up in TestFlight after Apple finishes processing (usually 10–30 min)."
 
       - name: Remove the key file
         if: always()
