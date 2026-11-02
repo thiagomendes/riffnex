@@ -55,6 +55,8 @@ final class ArenaModel {
         }
         let state = await app.studioState(for: song)
         practicedSeconds = state.practicedSeconds
+        tuning = state.tuning.flatMap(TuningPreset.init(rawValue:)) ?? .standard
+        tuningAnswered = state.tuningAnswered ?? false
         setSpeed(Self.speedRange.contains(state.rate) ? state.rate : 1, haptic: false)
         if let saved = state.loop, state.loopEnabled {
             catchRiff(saved, animated: false)
@@ -63,6 +65,7 @@ final class ArenaModel {
         }
         applyFocus()
         lastTime = player.currentTime
+        await refreshNeck()
         ticker = Task { [weak self] in
             while !Task.isCancelled {
                 self?.tick()
@@ -77,7 +80,7 @@ final class ArenaModel {
         player.pause()
         practicedSeconds += player.takePracticedSeconds()
         let state = StudioState(position: player.currentTime, rate: speed, loop: loop, loopEnabled: loop != nil,
-                                practicedSeconds: practicedSeconds)
+                                practicedSeconds: practicedSeconds, tuning: tuning.rawValue, tuningAnswered: tuningAnswered)
         await app.save(state, for: song)
         player.unload()
     }
@@ -87,6 +90,54 @@ final class ArenaModel {
     /// Notes guessed from the separated guitar, once read.
     var notes: NoteMap? { app.prep.notes[song.id] }
     var noteProgress: Double? { app.prep.noteProgress[song.id] }
+
+    // MARK: Tuning
+
+    /// The tuning the neck is drawn for.
+    private(set) var tuning: TuningPreset = .standard
+    /// The guessed notes placed on the neck for `tuning`.
+    private(set) var neck: NeckNotes?
+    /// A suggested tuning, shown until the user answers it.
+    private(set) var suggestion: TuningSuggestion?
+    private(set) var tuningAnswered = false
+
+    /// Places the notes on the neck for the current tuning (off the main actor) and looks for a
+    /// tuning suggestion. Called when the notes arrive or the tuning changes.
+    func refreshNeck() async {
+        guard let notes else { neck = nil; return }
+        let detected = notes.detected
+        let preset = tuning
+        let placed = await Task.detached(priority: .userInitiated) {
+            NoteMapBuilder.arrange(detected, tuning: preset.tuning)
+        }.value
+        guard preset == tuning else { return }
+        neck = placed
+        if !tuningAnswered, let found = TuningDetector.suggest(detected), found.preset != tuning {
+            suggestion = found
+        } else {
+            suggestion = nil
+        }
+    }
+
+    func choose(_ preset: TuningPreset) {
+        tuningAnswered = true
+        suggestion = nil
+        guard preset != tuning else { return }
+        tuning = preset
+        neck = nil
+        stepHaptic.selectionChanged()
+        Task { await refreshNeck() }
+    }
+
+    /// The detector's opinion even after it was answered (to mark it in the tuning list).
+    var detectedSuggestion: TuningSuggestion? {
+        notes.flatMap { TuningDetector.suggest($0.detected) }
+    }
+
+    func dismissSuggestion() {
+        tuningAnswered = true
+        suggestion = nil
+    }
 
     var isPlaying: Bool { player.isPlaying }
     var currentTime: Seconds { player.currentTime }

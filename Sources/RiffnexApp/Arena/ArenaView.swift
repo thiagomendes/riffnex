@@ -39,6 +39,7 @@ struct ArenaView: View {
     @State private var clock = FrameClock()
     @AppStorage("rx.showNeck") private var showNeck = true
     @State private var showingAbout = false
+    @State private var showingTuning = false
     @Environment(\.dismiss) private var dismiss
 
     init(song: SongRecord, map: RiffMap, app: AppModel) {
@@ -123,7 +124,38 @@ struct ArenaView: View {
                         }
                         .accessibilityLabel("Como as notas são estimadas")
                         .position(x: 34, y: size.height * 0.66 + 48)
+
+                        Button { model.pause(); showingTuning = true } label: {
+                            HStack(spacing: 4) {
+                                Text("AFINAÇÃO: \(model.tuning.title.uppercased())")
+                                Image(systemName: "chevron.down")
+                            }
+                            .font(.rxHUD(9))
+                            .foregroundStyle(model.tuning == .standard ? RX.Palette.textSecondary : RX.Palette.fireLight)
+                            .padding(.horizontal, 8).frame(height: 28)
+                            .background(RoundedRectangle(cornerRadius: 4).fill(RX.Palette.surface.opacity(0.9)))
+                            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(RX.Palette.hairline))
+                            .fixedSize()
+                        }
+                        .frame(minHeight: 44)
+                        .accessibilityLabel("Afinação: \(model.tuning.title). Toque para trocar ou afinar a guitarra.")
+                        .position(x: size.width - 86, y: size.height * 0.66)
                     }
+                }
+
+                if showNeck, let suggestion = model.suggestion {
+                    TuningSuggestionCard(suggestion: suggestion) {
+                        model.choose(suggestion.preset)
+                        show(suggestion.preset.title)
+                    } keep: {
+                        model.dismissSuggestion()
+                    } details: {
+                        model.pause()
+                        showingTuning = true
+                    }
+                    .padding(.horizontal, RX.Space.m)
+                    .position(x: size.width / 2, y: size.height * 0.6)
+                    .transition(.opacity)
                 }
 
                 if let toast {
@@ -139,6 +171,12 @@ struct ArenaView: View {
         }
         .background(RX.Palette.base.ignoresSafeArea())
         .sheet(isPresented: $showingAbout) { EstimatedNotesSheet() }
+        .sheet(isPresented: $showingTuning) {
+            TuningSheet(current: model.tuning, suggestion: model.suggestion ?? model.detectedSuggestion) { preset in
+                model.choose(preset)
+            }
+        }
+        .task(id: model.notes?.createdAt) { await model.refreshNeck() }
         .task { await model.start() }
         .onDisappear { Task { await model.stop() } }
     }
@@ -146,7 +184,7 @@ struct ArenaView: View {
     private var sceneInput: ArenaScene.Input {
         ArenaScene.Input(now: model.currentTime, playing: model.isPlaying, map: model.map, loop: model.loop,
                          focus: model.focus, speed: model.speed, laps: model.laps, ramping: model.ramping,
-                         lapsAtSpeed: model.lapsAtThisSpeed, selection: selection, notes: model.notes,
+                         lapsAtSpeed: model.lapsAtThisSpeed, selection: selection, notes: model.neck,
                          noteProgress: model.noteProgress, showNeck: showNeck)
     }
 
@@ -503,7 +541,7 @@ struct EstimatedNotesSheet: View {
                         Text("• a guitarra tem muita distorção ou toca acordes;")
                         Text("• há duas guitarras ou outro instrumento parecido;")
                         Text("• a gravação tem pouca qualidade;")
-                        Text("• a guitarra está afinada fora do padrão (meio tom abaixo, drop D…): as notas podem estar certas e as casas, não.")
+                        Text("• a guitarra está afinada fora do padrão (meio tom abaixo, drop D…): as notas podem estar certas e as casas, não. Troque no botão \"Afinação\", que também ajuda a afinar a guitarra de ouvido.")
                     }
                     Text("Notas vazadas e tracejadas são as que o app tem menos certeza. A casa e o dedo são uma forma confortável de tocar; o guitarrista original pode ter usado outra.")
                     Text("Na dúvida, confie no ouvido: deixe só a guitarra, diminua a velocidade e prenda o trecho no anel.")
@@ -519,5 +557,38 @@ struct EstimatedNotesSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// "This song seems to be half a step down": shown once per song, never applied on its own.
+struct TuningSuggestionCard: View {
+    let suggestion: TuningSuggestion
+    let use: () -> Void
+    let keep: () -> Void
+    let details: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: RX.Space.s) {
+            HStack(spacing: 6) {
+                Image(systemName: "guitars.fill").foregroundStyle(RX.Palette.fireLight)
+                Text("Parece \(suggestion.preset.title.lowercased())").font(.rxHUD(13, weight: .heavy))
+                    .foregroundStyle(RX.Palette.textPrimary)
+            }
+            Text(suggestion.reason).font(.footnote).foregroundStyle(RX.Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: RX.Space.xs) {
+                Button("Usar \(suggestion.preset.title.lowercased())", action: use)
+                    .buttonStyle(ArenaButtonStyle(prominent: true, active: false))
+                Button("Manter padrão", action: keep)
+                    .buttonStyle(ArenaButtonStyle(prominent: false, active: false))
+            }
+            Button(action: details) {
+                Text("Ver afinações e afinar de ouvido").font(.footnote.weight(.semibold)).foregroundStyle(RX.Palette.cyan)
+            }
+        }
+        .padding(RX.Space.m)
+        .background(RoundedRectangle(cornerRadius: 14).fill(RX.Palette.surface.opacity(0.97)))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(RX.Palette.magenta.opacity(0.5)))
+        .shadow(color: .black.opacity(0.5), radius: 20)
     }
 }

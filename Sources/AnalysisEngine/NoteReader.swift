@@ -38,14 +38,14 @@ public enum NoteReader {
             progress(Double(index + 1) / Double(max(windows, 1)))
         }
         let frames = min(totalFrames, notes.count / bins)
-        let guessed = NoteMapBuilder.guess(
+        let detected = NoteMapBuilder.detect(
             notes: ActivationMatrix(frames: frames, bins: bins, values: Array(notes.prefix(frames * bins))),
             onsets: ActivationMatrix(frames: frames, bins: bins, values: Array(onsets.prefix(frames * bins))),
             duration: duration)
         let seconds = (clock.now - start).seconds
-        log.info("Read \(guessed.count) notes in \(seconds, privacy: .public)s")
+        log.info("Read \(detected.count) notes in \(seconds, privacy: .public)s")
         return NoteMap(model: "\(BasicPitchModel.Constants.modelVersion)+\(NoteMapBuilder.version)",
-                       sources: stems.map { $0.deletingPathExtension().lastPathComponent }, notes: guessed, seconds: seconds)
+                       sources: stems.map { $0.deletingPathExtension().lastPathComponent }, detected: detected, seconds: seconds)
     }
 
     /// Sum of the stems, mono at Basic Pitch's sample rate.

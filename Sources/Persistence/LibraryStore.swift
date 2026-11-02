@@ -41,11 +41,17 @@ public struct StudioState: Codable, Sendable, Hashable {
     public var loopEnabled: Bool
     /// Seconds of audio actually played in this song (measured while playing).
     public var practicedSeconds: Double
+    /// Tuning chosen for the neck (`TuningPreset` raw value); nil = standard.
+    public var tuning: String?
+    /// The user already answered the tuning suggestion for this song.
+    public var tuningAnswered: Bool?
 
     public static let rateRange: ClosedRange<Double> = 0.25...1.25
 
     public init(position: Seconds = 0, rate: Double = 1, loop: LoopRegion? = nil, loopEnabled: Bool = false,
-                practicedSeconds: Double = 0) {
+                practicedSeconds: Double = 0, tuning: String? = nil, tuningAnswered: Bool? = nil) {
+        self.tuning = tuning
+        self.tuningAnswered = tuningAnswered
         self.position = max(0, position)
         self.rate = min(max(rate, Self.rateRange.lowerBound), Self.rateRange.upperBound)
         self.loop = loop

@@ -37,7 +37,7 @@ enum ArenaScene {
         var lapsAtSpeed: Int
         var selection: ClosedRange<Seconds>?
         /// Guessed notes, when read; `noteProgress` while they are being read.
-        var notes: NoteMap?
+        var notes: NeckNotes?
         var noteProgress: Double?
         var showNeck: Bool
     }

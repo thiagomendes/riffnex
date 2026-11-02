@@ -164,27 +164,81 @@ struct NoteMapTests {
             GuessedNote(start: 1, end: 1.2, midi: 43, string: 0, fret: 3, finger: 3, sure: true),
             GuessedNote(start: 5, end: 5.5, midi: 45, string: 1, fret: 0, finger: 0, sure: false),
         ]
-        let map = NoteMap(model: "t", sources: ["guitar"], notes: notes, seconds: 0)
-        #expect(map.notes(from: 2, to: 4).map(\.midi) == [40]) // started earlier, still sounding
-        #expect(map.notes(from: 0.5, to: 1.1).map(\.midi) == [40, 43])
-        #expect(map.notes(from: 6, to: 7).isEmpty)
+        let neck = NeckNotes(tuning: .standard, notes: notes, unplayable: 0)
+        #expect(neck.notes(from: 2, to: 4).map(\.midi) == [40]) // started earlier, still sounding
+        #expect(neck.notes(from: 0.5, to: 1.1).map(\.midi) == [40, 43])
+        #expect(neck.notes(from: 6, to: 7).isEmpty)
     }
 
     @Test func demoNotesArePlayableAndMostlyRight() throws {
         let activations = try AnalysisFixtures.activations()
         let truth = try AnalysisFixtures.truth()
-        let guessed = NoteMapBuilder.guess(notes: activations.notes, onsets: activations.onsets, duration: truth.duration)
-        let tuning = Tuning.standard
-        for note in guessed {
+        let detected = NoteMapBuilder.detect(notes: activations.notes, onsets: activations.onsets, duration: truth.duration)
+        let neck = NoteMapBuilder.arrange(detected, tuning: .standard)
+        for note in neck.notes {
             #expect((0..<6).contains(note.string))
             #expect(note.fret >= 0 && note.fret <= 24)
-            #expect(tuning.pitch(at: FretPosition(string: note.string, fret: note.fret))?.value == note.midi)
+            #expect(Tuning.standard.pitch(at: FretPosition(string: note.string, fret: note.fret))?.value == note.midi)
         }
         let score = TranscriptionMetrics.score(
             reference: truth.notes.map { .init(onset: $0.onset, pitch: $0.midi) },
-            estimated: guessed.map { .init(onset: $0.start, pitch: $0.midi) },
+            estimated: neck.notes.map { .init(onset: $0.start, pitch: $0.midi) },
             onsetTolerance: 0.05)
-        print("[guessed notes] \(score); sure \(guessed.filter(\.sure).count)/\(guessed.count)")
+        print("[guessed notes] \(score); sure \(neck.notes.filter(\.sure).count)/\(neck.notes.count), unplayable \(neck.unplayable)")
         #expect(score.f1 >= 0.7)
+        // The demo is in standard tuning.
+        #expect(TuningDetector.suggest(detected) == nil)
+    }
+
+    @Test func retuningMovesFretsNotPitches() {
+        let detected = [DetectedNote(start: 0, end: 0.5, midi: 39, amplitude: 0.8),
+                        DetectedNote(start: 0.5, end: 1, midi: 44, amplitude: 0.8)]
+        #expect(NoteMapBuilder.arrange(detected, tuning: .standard).unplayable == 1) // D#2 is below the low E
+        let eb = NoteMapBuilder.arrange(detected, tuning: TuningPreset.halfDown.tuning)
+        #expect(eb.unplayable == 0)
+        #expect(eb.notes.map(\.midi) == [39, 44])
+        #expect(eb.notes.first?.fret == 0)
+    }
+}
+
+@Suite("Tuning detection")
+struct TuningDetectorTests {
+    func notes(_ pitches: [Int: Int], sure: Bool = true) -> [DetectedNote] {
+        var out: [DetectedNote] = []
+        var t = 0.0
+        for (midi, count) in pitches {
+            for _ in 0..<count {
+                out.append(DetectedNote(start: t, end: t + 0.2, midi: midi, amplitude: sure ? 0.8 : 0.2))
+                t += 0.25
+            }
+        }
+        return out
+    }
+
+    @Test func standardWhenItReachesTheLowE() {
+        #expect(TuningDetector.suggest(notes([40: 30, 45: 20, 47: 20])) == nil)
+    }
+
+    @Test func halfDownWhenItSitsOnDSharp() {
+        #expect(TuningDetector.suggest(notes([39: 30, 44: 20, 46: 20]))?.preset == .halfDown)
+        // Occasional D# with plenty of low E is just a note, not a tuning.
+        #expect(TuningDetector.suggest(notes([39: 5, 40: 40, 45: 20])) == nil)
+    }
+
+    @Test func dropTuningsFromNotesBelowE() {
+        #expect(TuningDetector.suggest(notes([38: 20, 45: 20, 50: 20]))?.preset == .dropD)
+        #expect(TuningDetector.suggest(notes([37: 20, 44: 20]))?.preset == .dropCSharp)
+        #expect(TuningDetector.suggest(notes([36: 20, 43: 20]))?.preset == .dropC)
+    }
+
+    @Test func needsEnoughSureNotes() {
+        #expect(TuningDetector.suggest(notes([36: 10])) == nil)
+        #expect(TuningDetector.suggest(notes([36: 50], sure: false)) == nil)
+    }
+
+    @Test func presetNames() {
+        #expect(TuningPreset.standard.stringNames == "E A D G B E")
+        #expect(TuningPreset.dropD.stringNames == "D A D G B E")
+        #expect(TuningPreset.halfDown.stringNames == "E♭ A♭ D♭ G♭ B♭ E♭")
     }
 }

@@ -49,7 +49,7 @@ enum NeckScene {
         func scale(_ z: Double) -> CGFloat { 1 - 0.7 * perspective(max(z, 0)) }
     }
 
-    static func draw(_ context: inout GraphicsContext, size: CGSize, now: Seconds, loop: LoopRegion?, notes: NoteMap,
+    static func draw(_ context: inout GraphicsContext, size: CGSize, now: Seconds, loop: LoopRegion?, notes: NeckNotes,
                      map: RiffMap, pulse: Double, guitarAlpha: Double) {
         let f = Frame(size: size, now: now)
         let visible = placed(notes: notes, now: now, loop: loop)
@@ -303,7 +303,7 @@ enum NeckScene {
 
     /// Notes to show between just behind the strike line and the horizon. Inside a caught riff, the
     /// riff's notes are repeated for the coming laps instead of showing what follows in the song.
-    static func placed(notes: NoteMap, now: Seconds, loop: LoopRegion?) -> [Placed] {
+    static func placed(notes: NeckNotes, now: Seconds, loop: LoopRegion?) -> [Placed] {
         let from = now - 0.4, to = now + lookahead
         guard let loop, loop.contains(now) else {
             return notes.notes(from: from, to: to).map { Placed(note: $0, start: $0.start, end: $0.end) }

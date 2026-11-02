@@ -113,15 +113,15 @@ struct StemSeparatorTests {
         var matched = 0
         var used = Set<Int>()
         for ref in truth.notes {
-            if let i = noteMap.notes.indices.first(where: { !used.contains($0) && noteMap.notes[$0].midi == ref.midi
-                && abs(noteMap.notes[$0].start - ref.onset) <= 0.05 }) {
+            if let i = noteMap.detected.indices.first(where: { !used.contains($0) && noteMap.detected[$0].midi == ref.midi
+                && abs(noteMap.detected[$0].start - ref.onset) <= 0.05 }) {
                 used.insert(i)
                 matched += 1
             }
         }
-        let precision = Double(matched) / Double(max(noteMap.notes.count, 1))
+        let precision = Double(matched) / Double(max(noteMap.detected.count, 1))
         let recall = Double(matched) / Double(max(truth.notes.count, 1))
-        print("[notes from separated guitar] \(noteMap.notes.count) guessed, \(truth.notes.count) true, matched \(matched): precision \(String(format: "%.2f", precision)), recall \(String(format: "%.2f", recall)); sure \(noteMap.notes.filter(\.sure).count); \(String(format: "%.1f", noteMap.seconds)) s")
+        print("[notes from separated guitar] \(noteMap.detected.count) guessed, \(truth.notes.count) true, matched \(matched): precision \(String(format: "%.2f", precision)), recall \(String(format: "%.2f", recall)); sure \(noteMap.detected.filter(\.sure).count); \(String(format: "%.1f", noteMap.seconds)) s")
         #expect(recall >= 0.6, "recall \(recall)")
         let result = (duration: map.duration, stems: Dictionary(uniqueKeysWithValues: map.stemNames.map {
             ($0, directory.appendingPathComponent("\($0).m4a"))
