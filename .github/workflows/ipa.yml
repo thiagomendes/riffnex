@@ -1,0 +1,31 @@
+name: IPA (probe)
+
+# Feasibility probe: can a Mac runner build the app bundle with xtool without signing, so the
+# owner can install it from Windows (no WSL)? Prints xtool's help for the build commands.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/ipa.yml"
+
+jobs:
+  probe:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xtool
+        run: |
+          brew install xtool-org/tap/xtool || true
+          which xtool && xtool --version || true
+      - name: xtool help
+        run: |
+          xtool --help || true
+          xtool dev --help || true
+          xtool dev build --help || true
+          xtool install --help || true
+      - name: Try an unsigned build
+        run: |
+          xtool dev build 2>&1 | tail -40 || true
+          find . -name "*.app" -maxdepth 4 -print || true
+          find . -name "*.ipa" -maxdepth 4 -print || true
