@@ -260,37 +260,62 @@ public actor StemSeparator {
         try model.prediction(from: provider)
     }
 
-    /// Dense Float copy of a contiguous multi-array (float32 or float16 storage).
+    /// Dense row-major Float copy of a multi-array (float32 or float16 storage).
+    ///
+    /// On device the Neural Engine pads the last axis (e.g. 343,980 values stored in rows of 344,000),
+    /// so the copy follows the array's real strides instead of assuming contiguity.
     static func floats(_ array: MLMultiArray, expected: Int) throws -> [Float] {
         guard array.count == expected else {
             throw SeparationError.unexpectedOutput("\(array.count) valores em vez de \(expected), forma \(array.shape)")
         }
-        // Require row-major contiguity (the converted model's outputs are).
         let shape = array.shape.map(\.intValue)
         let strides = array.strides.map(\.intValue)
-        var expectedStride = 1
-        for axis in stride(from: shape.count - 1, through: 0, by: -1) {
-            guard strides[axis] == expectedStride || shape[axis] == 1 else {
-                throw SeparationError.unexpectedOutput("saída não contígua \(strides)")
-            }
-            expectedStride *= shape[axis]
-        }
         var values = [Float](repeating: 0, count: expected)
         switch array.dataType {
         case .float32:
             array.withUnsafeBufferPointer(ofType: Float.self) { buffer in
-                values.withUnsafeMutableBufferPointer { $0.baseAddress!.update(from: buffer.baseAddress!, count: expected) }
+                values.withUnsafeMutableBufferPointer { out in
+                    stridedCopy(shape: shape, strides: strides, from: buffer.baseAddress!, into: out.baseAddress!) { $0 }
+                }
             }
         #if arch(arm64)
         case .float16:
             array.withUnsafeBufferPointer(ofType: Float16.self) { buffer in
-                for i in 0..<expected { values[i] = Float(buffer[i]) }
+                values.withUnsafeMutableBufferPointer { out in
+                    stridedCopy(shape: shape, strides: strides, from: buffer.baseAddress!, into: out.baseAddress!) { Float($0) }
+                }
             }
         #endif
         default:
             for i in 0..<expected { values[i] = array[i].floatValue }
         }
         return values
+    }
+
+    /// Gathers a strided N-d array into a dense row-major buffer, one innermost row at a time.
+    static func stridedCopy<T>(shape: [Int], strides: [Int], from source: UnsafePointer<T>,
+                               into destination: UnsafeMutablePointer<Float>, convert: (T) -> Float) {
+        guard let last = shape.last, let innerStride = strides.last else { return }
+        let outer = shape.dropLast().reduce(1, *)
+        var index = [Int](repeating: 0, count: max(shape.count - 1, 0))
+        for row in 0..<outer {
+            var offset = 0
+            for axis in 0..<index.count { offset += index[axis] * strides[axis] }
+            let src = source + offset
+            let dst = destination + row * last
+            if innerStride == 1, T.self == Float.self {
+                dst.update(from: UnsafeRawPointer(src).assumingMemoryBound(to: Float.self), count: last)
+            } else {
+                for i in 0..<last { dst[i] = convert(src[i * innerStride]) }
+            }
+            var axis = index.count - 1
+            while axis >= 0 {
+                index[axis] += 1
+                if index[axis] < shape[axis] { break }
+                index[axis] = 0
+                axis -= 1
+            }
+        }
     }
 
     /// Decodes any audio file to stereo float at `sampleRate`, written to `destination`. Returns frames.

@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import CoreML
 import Testing
 @testable import AnalysisEngine
 
@@ -166,5 +167,26 @@ struct SeparatedAnalysisTests {
         #expect(analysis.notes.count > 30)
         #expect(analysis.components.contains { $0.component == .stemSeparator })
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("guitar.m4a").path))
+    }
+}
+
+@Suite("Model output copy")
+struct ModelOutputCopyTests {
+    /// The Neural Engine pads rows on device (seen as strides [4128000, 688000, 344000, 1]).
+    @Test func copiesPaddedRowsInOrder() throws {
+        let shape = [2, 3, 5], padded = 8
+        let strides = [3 * padded, padded, 1]
+        let storage = UnsafeMutablePointer<Float>.allocate(capacity: 2 * 3 * padded)
+        storage.initialize(repeating: -1, count: 2 * 3 * padded)
+        var expected: [Float] = []
+        for a in 0..<2 { for b in 0..<3 { for c in 0..<5 {
+            let value = Float(a * 100 + b * 10 + c)
+            storage[a * strides[0] + b * strides[1] + c] = value
+            expected.append(value)
+        } } }
+        let array = try MLMultiArray(dataPointer: storage, shape: shape.map { NSNumber(value: $0) }, dataType: .float32,
+                                     strides: strides.map { NSNumber(value: $0) }) { $0.deallocate() }
+        let values = try StemSeparator.floats(array, expected: 30)
+        #expect(values == expected)
     }
 }
