@@ -176,8 +176,14 @@ enum NeckScene {
                 lit.fill(ring, with: .radialGradient(Gradient(colors: [.white, color]), center: center, startRadius: 0, endRadius: rx))
             }
             context.stroke(ring, with: .color(color.opacity(held ? 1 : 0.75)), lineWidth: 2.5)
-            context.stroke(Path(ellipseIn: CGRect(x: center.x - rx * 0.55, y: center.y - ry * 0.55, width: rx * 1.1, height: ry * 1.1)),
-                           with: .color(color.opacity(0.35)), lineWidth: 1)
+            if let sounding = visible.first(where: { $0.note.string == string && $0.start <= f.now && f.now < $0.end }) {
+                // The note you hear now, big inside the lit target.
+                context.draw(Text(letter(sounding.note.midi)).font(.rxBig(15)).foregroundStyle(Color(hex: 0x14081F)),
+                             at: center)
+            } else {
+                context.stroke(Path(ellipseIn: CGRect(x: center.x - rx * 0.55, y: center.y - ry * 0.55, width: rx * 1.1, height: ry * 1.1)),
+                               with: .color(color.opacity(0.35)), lineWidth: 1)
+            }
             // Flame on the hit: rises and fades in a third of a second.
             if let age = hit {
                 let k = 1 - age / 0.35
@@ -252,13 +258,22 @@ enum NeckScene {
         }
     }
 
-    /// The note's name (E, G♯…) under the gem, once it is close enough to read.
+    static func letter(_ midi: Int) -> String {
+        NoteNaming.letters.name(of: MIDINote(unchecked: midi).pitchClass)
+    }
+
+    /// The note's name (E, G♯…) in a dark badge under the gem, readable over any lane.
     private static func drawLetter(_ context: inout GraphicsContext, note: GuessedNote, center: CGPoint, ry: CGFloat,
                                    scale: CGFloat, color: Color, alpha: Double) {
-        guard scale > 0.55 else { return }
-        let name = NoteNaming.letters.name(of: MIDINote(unchecked: note.midi).pitchClass)
-        context.draw(Text(name).font(.rxHUD(10 * scale, weight: .heavy)).foregroundStyle(color.opacity(alpha)),
-                     at: CGPoint(x: center.x, y: center.y + ry + 8 * scale))
+        guard scale > 0.4 else { return }
+        let size = 10 + 4 * scale
+        let width = size * (letter(note.midi).count > 1 ? 2.1 : 1.6), height = size * 1.35
+        let badge = CGRect(x: center.x - width / 2, y: center.y + ry + 2 * scale, width: width, height: height)
+        let shape = Path(roundedRect: badge, cornerRadius: height / 2)
+        context.fill(shape, with: .color(Color(hex: 0x07060F).opacity(0.88 * alpha)))
+        context.stroke(shape, with: .color(color.opacity(alpha)), lineWidth: 1.2)
+        context.draw(Text(letter(note.midi)).font(.rxHUD(size, weight: .heavy)).foregroundStyle(Color.white.opacity(alpha)),
+                     at: CGPoint(x: badge.midX, y: badge.midY))
     }
 
     /// "MÃO NA CASA 5": where the hand should sit for the next notes.
