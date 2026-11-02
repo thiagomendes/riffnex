@@ -20,9 +20,9 @@ final class ArenaModel {
     private(set) var lapsAtThisSpeed = 0
     private(set) var practicedSeconds: Double = 0
 
-    static let speedRange: ClosedRange<Double> = 0.4...1
-    static let rampStep = 0.05
-    static let lapsPerStep = 2
+    nonisolated static let speedRange: ClosedRange<Double> = 0.4...1
+    nonisolated static let rampStep = 0.05
+    nonisolated static let lapsPerStep = 2
 
     let song: SongRecord
     let map: RiffMap
@@ -117,8 +117,8 @@ final class ArenaModel {
         return stop
     }
 
-    static func guitarLevel(_ focus: Double) -> Double { focus >= 0 ? 1 : 1 + focus }
-    static func bandLevel(_ focus: Double) -> Double { focus <= 0 ? 1 : 1 - focus }
+    nonisolated static func guitarLevel(_ focus: Double) -> Double { focus >= 0 ? 1 : 1 + focus }
+    nonisolated static func bandLevel(_ focus: Double) -> Double { focus <= 0 ? 1 : 1 - focus }
 
     private func applyFocus() {
         let guitar = Float(Self.guitarLevel(focus))

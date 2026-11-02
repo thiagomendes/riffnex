@@ -167,8 +167,12 @@ enum ArenaScene {
             let hb = CGFloat(map.bandLevel(at: t)) * g.maxHeight
             let hg = CGFloat(map.guitarLevel(at: t)) * g.maxHeight * 0.8
             let past = t < now
-            if hb > 0.5 { addBar(past ? &bandPast : &bandNext, x: x, y: g.cy, half: hb) }
-            if hg > 0.5 { addBar(past ? &guitarPast : &guitarNext, x: x, y: g.cy, half: hg) }
+            if hb > 0.5 {
+                if past { addBar(&bandPast, x: x, y: g.cy, half: hb) } else { addBar(&bandNext, x: x, y: g.cy, half: hb) }
+            }
+            if hg > 0.5 {
+                if past { addBar(&guitarPast, x: x, y: g.cy, half: hg) } else { addBar(&guitarNext, x: x, y: g.cy, half: hg) }
+            }
         }
         glowStroke(&context, bandPast, color: RX.Palette.cyan, alpha: alpha * bandAlpha * 0.85)
         glowStroke(&context, bandNext, color: RX.Palette.cyan, alpha: alpha * bandAlpha * 0.38)
