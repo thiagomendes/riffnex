@@ -1,5 +1,8 @@
 import Foundation
 
+/// Time in seconds.
+public typealias Seconds = Double
+
 /// A loop region in seconds of the original audio. Always valid: `0 <= start < end <= duration`
 /// and at least `minimumLength` long.
 public struct LoopRegion: Codable, Sendable, Hashable {

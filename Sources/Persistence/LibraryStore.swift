@@ -113,8 +113,8 @@ public actor LibraryStore {
         folder(for: id).appendingPathComponent("artwork.jpg")
     }
 
-    public nonisolated func analysisURL(for id: UUID) -> URL {
-        folder(for: id).appendingPathComponent("analysis.json")
+    public nonisolated func riffMapURL(for id: UUID) -> URL {
+        folder(for: id).appendingPathComponent("riffmap.json")
     }
 
     private nonisolated func stateURL(for id: UUID) -> URL {
@@ -204,27 +204,23 @@ public actor LibraryStore {
         try write(waveform, to: waveformURL(for: id))
     }
 
-    /// The stored analysis, or `nil` if there is none or it was written with a different schema
-    /// (the caller then offers to analyze again — we never show results we cannot read faithfully).
-    public func analysis(for id: UUID) -> SongAnalysis? {
-        guard let data = try? Data(contentsOf: analysisURL(for: id)),
-              let analysis = try? Self.decoder.decode(SongAnalysis.self, from: data),
-              analysis.schemaVersion == SongAnalysis.currentSchemaVersion else { return nil }
-        return analysis
+    /// The song's practice map, or `nil` if there is none or it was written with a different schema
+    /// (the song is then prepared again — we never show data we cannot read faithfully).
+    public func riffMap(for id: UUID) -> RiffMap? {
+        guard let data = try? Data(contentsOf: riffMapURL(for: id)),
+              let map = try? Self.decoder.decode(RiffMap.self, from: data),
+              map.schemaVersion == RiffMap.currentSchemaVersion else { return nil }
+        return map
     }
 
-    public func hasAnalysis(for id: UUID) -> Bool {
-        FileManager.default.fileExists(atPath: analysisURL(for: id).path)
-    }
-
-    /// Written atomically, so a cancelled or crashed analysis never leaves a partial file.
-    public func save(_ analysis: SongAnalysis, for id: UUID) throws {
+    /// Written atomically, so a cancelled or crashed preparation never leaves a partial file.
+    public func save(_ map: RiffMap, for id: UUID) throws {
         guard song(id) != nil else { throw LibraryError.unknownSong(id) }
-        try write(analysis, to: analysisURL(for: id))
+        try write(map, to: riffMapURL(for: id))
     }
 
-    public func removeAnalysis(for id: UUID) throws {
-        let url = analysisURL(for: id)
+    public func removeRiffMap(for id: UUID) throws {
+        let url = riffMapURL(for: id)
         if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
     }
 
