@@ -192,12 +192,16 @@ final class AnalysisCenter {
     /// Asks iOS for extra time if the user leaves the app mid-analysis. If that time runs out,
     /// the analysis is cancelled cleanly (nothing partial is saved) and can be restarted.
     private func beginBackgroundTime() {
+        // Keep the screen on while analysing: separation takes minutes and auto-lock would stop it.
+        UIApplication.shared.isIdleTimerDisabled = true
         guard backgroundTask == .invalid else { return }
+        // iOS calls the expiration handler on the main thread and terminates the app unless the task is
+        // ended before the handler returns, so everything here runs synchronously.
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "RIFFNEX analysis") { [weak self] in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 guard let self else { return }
                 if let id = self.current?.songID {
-                    self.failures[id] = "A análise foi interrompida porque o app ficou em segundo plano. Toque para recomeçar."
+                    self.failures[id] = "A análise parou porque o app saiu da tela. Deixe o RIFFNEX aberto e toque para recomeçar."
                 }
                 self.task?.cancel()
                 self.endBackgroundTime()
@@ -206,6 +210,7 @@ final class AnalysisCenter {
     }
 
     private func endBackgroundTime() {
+        UIApplication.shared.isIdleTimerDisabled = false
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
