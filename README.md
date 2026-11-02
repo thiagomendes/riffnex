@@ -19,7 +19,7 @@ Swift 6 · SwiftUI · AVAudioEngine · Core ML (Spotify Basic Pitch, Apache-2.0)
 
 ## Build instructions
 
-See **[`docs/toolchain.md`](docs/toolchain.md)** for step-by-step instructions (in Portuguese). No Mac is required. Builds use [xtool](https://github.com/xtool-org/xtool) on Linux or Windows (WSL) with Swift 6.4 and an iOS SDK extracted from Xcode 27.1, and the app is installed on the iPhone over USB. CI builds and tests on GitHub Actions macOS runners.
+**Easiest (Windows, no WSL):** CI builds an unsigned `.ipa` on every push (`.github/workflows/ipa.yml`); install it with Sideloadly — see **[`docs/instalar-no-windows.md`](docs/instalar-no-windows.md)** (Portuguese). Alternatively see **[`docs/toolchain.md`](docs/toolchain.md)** for step-by-step instructions (in Portuguese). No Mac is required. Builds use [xtool](https://github.com/xtool-org/xtool) on Linux or Windows (WSL) with Swift 6.4 and an iOS SDK extracted from Xcode 27.1, and the app is installed on the iPhone over USB. CI builds and tests on GitHub Actions macOS runners.
 
 ### Tests
 

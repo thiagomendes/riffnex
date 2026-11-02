@@ -1,31 +1,42 @@
-name: IPA (probe)
+name: IPA
 
-# Feasibility probe: can a Mac runner build the app bundle with xtool without signing, so the
-# owner can install it from Windows (no WSL)? Prints xtool's help for the build commands.
+# Builds an unsigned RiffnexApp.ipa on a Mac runner with xtool, so the owner can install it from
+# Windows with a sideloading tool (which signs it with their Apple ID) — no WSL needed.
 on:
   workflow_dispatch:
   push:
+    branches: ["claude/m2-analysis", "main"]
     paths:
+      - "Sources/**"
+      - "App/**"
+      - "Package.swift"
+      - "xtool.yml"
       - ".github/workflows/ipa.yml"
 
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  probe:
+  build:
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install xtool
         run: |
-          brew install xtool-org/tap/xtool || true
-          which xtool && xtool --version || true
-      - name: xtool help
+          brew install xtool-org/tap/xtool
+          xtool --version
+      - name: Build unsigned IPA (release)
         run: |
-          xtool --help || true
-          xtool dev --help || true
-          xtool dev build --help || true
-          xtool install --help || true
-      - name: Try an unsigned build
-        run: |
-          xtool dev build 2>&1 | tail -40 || true
-          find . -name "*.app" -maxdepth 4 -print || true
-          find . -name "*.ipa" -maxdepth 4 -print || true
+          xtool dev build --configuration release --ipa
+          IPA=$(find xtool -maxdepth 1 -name "*.ipa" | head -1)
+          test -n "$IPA"
+          mkdir -p out
+          cp "$IPA" "out/RIFFNEX-${GITHUB_SHA::7}.ipa"
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RIFFNEX-ipa
+          path: out/*.ipa
+          retention-days: 30
