@@ -50,9 +50,10 @@ Vá em https://github.com/thiagomendes/riffnex › **Settings** › **Secrets an
 | `APPLE_TEAM_ID` | o Team ID (passo 4) |
 
 ### 6. Disparar o primeiro envio
-1. No GitHub, abra **Actions** › **TestFlight** › **Run workflow**.
-2. Escolha a branch `claude/m2-analysis` e clique em **Run workflow**.
-3. Leva uns 10 minutos. Me avise quando terminar, com ✓ verde ou com ✗. Se der ✗, eu leio o log e corrijo; não precisa me mandar nada.
+1. O envio roda sozinho a cada atualização do app na branch `claude/m2-analysis`. Para disparar à mão, abra **Actions** › **TestFlight** › **Run workflow**.
+   - O botão **Run workflow** só aparece se o workflow estiver na branch padrão do repositório.
+   - Para ter o botão, mude a branch padrão em **Settings** › **General** › **Default branch**.
+2. Leva uns 10 minutos. Me avise quando terminar, com ✓ verde ou com ✗. Se der ✗, eu leio o log e corrijo; não precisa me mandar nada.
 
 ### 7. No iPhone
 1. Instale o app **TestFlight**, da Apple, pela App Store.
