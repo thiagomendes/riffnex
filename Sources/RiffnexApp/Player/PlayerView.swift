@@ -16,6 +16,8 @@ struct PlayerView: View {
     @State private var restored = false
     @State private var practicedBefore: Double = 0
     @State private var showingSpeed = false
+    /// The full player (waveform, neck, tab) instead of the beginner flow, from "Mais".
+    @State private var showFullPlayer = false
 
     private var player: AudioPlayer { app.player }
     /// Once the Studio panel is showing, the header and waveform shrink to make room for it.
@@ -24,6 +26,36 @@ struct PlayerView: View {
     var body: some View {
         ZStack {
             RXBackground()
+            if let analysis = app.analysis.analyses[song.id], !showFullPlayer, loadError == nil {
+                PracticeRoot(song: song, analysis: analysis) { showFullPlayer = true }
+            } else {
+                fullPlayer
+            }
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showFullPlayer {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Modo simples") { showFullPlayer = false }
+                }
+            }
+        }
+        .task { await restore() }
+        .onChange(of: app.analysis.analyses[song.id]?.createdAt) { _, _ in reloadForNewAnalysis() }
+        .onDisappear { Task { await persist(pausing: true) } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { Task { await persist(pausing: false) } }
+        }
+        .sheet(isPresented: $showingSpeed) {
+            SpeedSheet(rate: player.rate) { player.setRate($0) }
+                .presentationDetents([.height(260)])
+                .presentationBackground(RX.Palette.surface)
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: player.isPlaying)
+    }
+
+    private var fullPlayer: some View {
             VStack(spacing: RX.Space.m) {
                 header
                 AnalysisCard(song: song)
@@ -45,21 +77,6 @@ struct PlayerView: View {
             }
             .padding(.horizontal, RX.Space.screenMargin)
             .padding(.bottom, RX.Space.m)
-        }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await restore() }
-        .onChange(of: app.analysis.analyses[song.id]?.createdAt) { _, _ in reloadForNewAnalysis() }
-        .onDisappear { Task { await persist(pausing: true) } }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { Task { await persist(pausing: false) } }
-        }
-        .sheet(isPresented: $showingSpeed) {
-            SpeedSheet(rate: player.rate) { player.setRate($0) }
-                .presentationDetents([.height(260)])
-                .presentationBackground(RX.Palette.surface)
-        }
-        .sensoryFeedback(.impact(weight: .light), trigger: player.isPlaying)
     }
 
     // MARK: Sections

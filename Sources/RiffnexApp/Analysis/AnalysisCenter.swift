@@ -36,6 +36,8 @@ final class AnalysisCenter {
     private(set) var failures: [UUID: String] = [:]
     /// Fingering + tab layout per analyzed song, computed off the main actor on first use.
     private(set) var layouts: [UUID: TabLayout] = [:]
+    /// The beginner practice material (main line, phrases, its fingering, key) per analyzed song.
+    private(set) var practice: [UUID: PracticeMaterial] = [:]
     private var known: Set<UUID> = []
 
     @ObservationIgnored private let store: LibraryStore
@@ -98,8 +100,15 @@ final class AnalysisCenter {
         if analyses[id] == analysis { layouts[id] = layout }
     }
 
+    func preparePractice(for id: UUID) async {
+        guard practice[id] == nil, let analysis = analyses[id] else { return }
+        let material = await Task.detached(priority: .userInitiated) { PracticeMaterial(analysis: analysis) }.value
+        if analyses[id] == analysis { practice[id] = material }
+    }
+
     func forget(_ id: UUID) {
         cancel(id)
+        practice[id] = nil
         layouts[id] = nil
         analyses[id] = nil
         failures[id] = nil
@@ -165,6 +174,7 @@ final class AnalysisCenter {
         case .success(let analysis):
             analyses[id] = analysis
             layouts[id] = nil
+            practice[id] = nil
             known.insert(id)
             log.info("Analysis saved for \(id, privacy: .public)")
         case .failure(let error) where error is CancellationError:
@@ -199,5 +209,28 @@ final class AnalysisCenter {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
+    }
+}
+
+/// Everything the beginner screens need, computed once per analysis off the main actor.
+struct PracticeMaterial: Sendable {
+    let line: [NoteEvent]
+    let phrases: [Phrase]
+    /// Fingering and timing of the main line only (Riff mode never shows the other notes).
+    let lineLayout: TabLayout
+    let key: KeySummary?
+    /// Distinct chords in the order they first appear.
+    let chordsInOrder: [Chord]
+    let riffSections: [SongSection]
+
+    init(analysis: SongAnalysis) {
+        line = MainLine.extract(from: analysis.notes)
+        phrases = PhraseSplitter.split(line: line, bars: analysis.rhythm?.bars ?? [], duration: analysis.duration)
+        let arrangement = FingeringOptimizer().arrange(notes: line, phraseBoundaries: phrases.map(\.start))
+        lineLayout = TabLayout(arrangement: arrangement, rhythm: analysis.rhythm, duration: analysis.duration)
+        key = analysis.mainKey.map { KeySummary(key: $0, chords: analysis.chords) }
+        var seen = Set<Chord>()
+        chordsInOrder = analysis.chords.compactMap(\.chord).filter { seen.insert($0).inserted }
+        riffSections = analysis.sections.filter { $0.kind == .lettered && !$0.isChordal }
     }
 }
