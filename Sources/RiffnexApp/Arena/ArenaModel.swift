@@ -102,18 +102,21 @@ final class ArenaModel {
 
     // MARK: Focus
 
+    /// Any mix between the three stops; a light tick when passing one of them.
     func setFocus(_ value: Double) {
-        focus = min(max(value, -1), 1)
+        let new = min(max(value, -1), 1)
+        if [1.0, 0, -1].contains(where: { ($0 - focus) * ($0 - new) < 0 || ($0 == new && $0 != focus) }) {
+            stepHaptic.selectionChanged()
+        }
+        focus = new
         applyFocus()
     }
 
-    /// Snaps to the nearest of the three stops when close to one. Returns the stop reached.
+    /// Lands exactly on a stop only when released right next to it; otherwise the mix stays as set.
     @discardableResult
     func settleFocus() -> Double? {
-        guard let stop = [1.0, 0, -1].first(where: { abs($0 - focus) < 0.34 }) else { return nil }
-        let changed = stop != focus
+        guard let stop = [1.0, 0, -1].first(where: { abs($0 - focus) < 0.06 }) else { return nil }
         setFocus(stop)
-        if changed { stepHaptic.selectionChanged() }
         return stop
     }
 
@@ -121,8 +124,9 @@ final class ArenaModel {
     nonisolated static func bandLevel(_ focus: Double) -> Double { focus <= 0 ? 1 : 1 - focus }
 
     private func applyFocus() {
-        let guitar = Float(Self.guitarLevel(focus))
-        let band = Float(Self.bandLevel(focus))
+        // Squared levels: loudness falls off evenly along the rail instead of all at the end.
+        let guitar = Float(pow(Self.guitarLevel(focus), 2))
+        let band = Float(pow(Self.bandLevel(focus), 2))
         for name in player.stemNames {
             player.setVolume(map.guitarStems.contains(name) ? guitar : band, forStem: name)
         }

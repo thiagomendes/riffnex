@@ -91,7 +91,7 @@ struct ArenaView: View {
                 FocusRail(focus: model.focus) { value in
                     model.setFocus(value)
                 } onEnd: {
-                    if let stop = model.settleFocus() { show(Self.focusName(stop)) }
+                    show(model.settleFocus().map(Self.focusName) ?? Self.focusLabel(model.focus))
                 }
                 .frame(width: 34, height: size.height * 0.34)
                 .position(x: size.width - 21, y: size.height * 0.45)
@@ -301,7 +301,7 @@ struct ArenaView: View {
         case .scrub:
             if t.wasPlaying { model.togglePlay() }
         case .focus:
-            if let stop = model.settleFocus() { show(Self.focusName(stop)) }
+            show(model.settleFocus().map(Self.focusName) ?? Self.focusLabel(model.focus))
         case .select:
             if let selection, let region = LoopRegion(start: selection.lowerBound, end: selection.upperBound, duration: model.duration) {
                 model.catchRiff(region)
@@ -318,6 +318,14 @@ struct ArenaView: View {
 
     static func focusName(_ stop: Double) -> String {
         stop > 0.5 ? "Só guitarra" : stop < -0.5 ? "Sua vez" : "Tudo junto"
+    }
+
+    /// The stop's name, or the mix in between ("Guitarra 100 · Banda 40").
+    static func focusLabel(_ focus: Double) -> String {
+        if let stop = [1.0, 0, -1].first(where: { $0 == focus }) { return focusName(stop) }
+        let guitar = Int((ArenaModel.guitarLevel(focus) * 100).rounded())
+        let band = Int((ArenaModel.bandLevel(focus) * 100).rounded())
+        return "Guitarra \(guitar) · Banda \(band)"
     }
 
     private func show(_ text: String) {
@@ -365,15 +373,15 @@ struct FocusRail: View {
                     .rotationEffect(.degrees(45))
                     .shadow(color: .white.opacity(0.6), radius: 8)
                     .position(x: proxy.size.width / 2, y: y)
-                Text(ArenaView.focusName(focus > 0.5 ? 1 : focus < -0.5 ? -1 : 0).uppercased())
+                Text(ArenaView.focusLabel(focus).uppercased())
                     .font(.rxHUD(9))
                     .foregroundStyle(RX.Palette.textPrimary)
                     .fixedSize()
                     .padding(.horizontal, 6).padding(.vertical, 4)
                     .background(RoundedRectangle(cornerRadius: 4).fill(RX.Palette.surface.opacity(0.92)))
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(RX.Palette.hairline))
-                    .position(x: -40, y: y)
-                    .opacity([1.0, 0, -1].contains(focus) ? 1 : 0.6)
+                    .monospacedDigit()
+                    .position(x: -64, y: y)
             }
             .contentShape(Rectangle())
             .gesture(
@@ -384,11 +392,11 @@ struct FocusRail: View {
         }
         .accessibilityElement()
         .accessibilityLabel("Foco")
-        .accessibilityValue(ArenaView.focusName(focus))
+        .accessibilityValue(ArenaView.focusLabel(focus))
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: onChange(min(1, focus.rounded() + 1))
-            case .decrement: onChange(max(-1, focus.rounded() - 1))
+            case .increment: onChange(min(1, focus + 0.25))
+            case .decrement: onChange(max(-1, focus - 0.25))
             @unknown default: break
             }
             onEnd()
