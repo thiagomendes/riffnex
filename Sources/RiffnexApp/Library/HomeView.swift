@@ -9,6 +9,7 @@ struct HomeView: View {
     @Binding var path: [SongRecord]
     @State private var showingImporter = false
     @State private var songPendingDeletion: SongRecord?
+    @State private var appeared = false
 
     var body: some View {
         ZStack {
@@ -35,6 +36,8 @@ struct HomeView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear { appeared = true }
+        .animation(RX.Motion.spatial, value: app.songs)
         .safeAreaInset(edge: .bottom) { importBar }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.audio]) { result in
             if case .success(let url) = result { app.importFile(at: url) }
@@ -92,7 +95,7 @@ struct HomeView: View {
                 .foregroundStyle(RX.Palette.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             LazyVStack(spacing: RX.Space.xs) {
-                ForEach(app.songs) { song in
+                ForEach(Array(app.songs.enumerated()), id: \.element.id) { index, song in
                     Button { path.append(song) } label: {
                         SongRow(song: song, waveform: app.waveforms[song.id], artworkURL: app.artworkURL(for: song),
                                 status: app.prep.status(for: song.id))
@@ -104,6 +107,14 @@ struct HomeView: View {
                         }
                     }
                     .accessibilityAction(named: "Remover") { songPendingDeletion = song }
+                    // Cards slide in one after another, and settle back as they scroll off the edges.
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 18)
+                    .animation(RX.Motion.spatial.delay(Double(min(index, 8)) * 0.05), value: appeared)
+                    .scrollTransition(.interactive, axis: .vertical) { view, phase in
+                        view.scaleEffect(phase.isIdentity ? 1 : 0.94).opacity(phase.isIdentity ? 1 : 0.6)
+                    }
+                    .transition(.asymmetric(insertion: .scale(scale: 0.9).combined(with: .opacity), removal: .opacity))
                 }
             }
         }
@@ -263,6 +274,7 @@ private struct SongRow: View {
             Label("Guitarra separada", systemImage: "checkmark").font(.rxHUD(9)).foregroundStyle(RX.Palette.cyan)
         case .running(let job):
             Text("SEPARANDO \(Int(job.fraction * 100))%").font(.rxHUD(9).monospacedDigit()).foregroundStyle(RX.Palette.fireLight)
+                .phaseAnimator([false, true]) { view, bright in view.opacity(bright ? 1 : 0.45) } animation: { _ in .easeInOut(duration: 0.8) }
         case .queued:
             Text("NA FILA").font(.rxHUD(9)).foregroundStyle(RX.Palette.textTertiary)
         case .failed:

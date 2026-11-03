@@ -55,7 +55,12 @@ enum ArenaScene {
         let bandAlpha = 0.1 + 0.9 * ArenaModel.bandLevel(input.focus)
 
         if input.showNeck, let notes = input.notes {
-            NeckScene.draw(&context, size: size, now: input.now, loop: input.loop, notes: notes, roots: input.roots, map: input.map,
+            // The neck fades and rises in after the tape lights up.
+            var neck = context
+            let rise = ease(min(1, max(0, fx.entrance * 1.6 - 0.4)))
+            neck.opacity = rise
+            neck.translateBy(x: 0, y: CGFloat(24 * (1 - rise)))
+            NeckScene.draw(&neck, size: size, now: input.now, loop: input.loop, notes: notes, roots: input.roots, map: input.map,
                            pulse: pulse, guitarAlpha: guitarAlpha)
         } else {
             drawFloor(&context, g: g, input: input, pulse: pulse)
@@ -65,11 +70,12 @@ enum ArenaScene {
                              at: CGPoint(x: g.cx, y: g.size.height * 0.75))
             }
         }
-        if e < 0.99 { drawTape(&context, g: g, input: input, alpha: 1 - e, guitarAlpha: guitarAlpha, bandAlpha: bandAlpha, pulse: pulse) }
+        if e < 0.99 { drawTape(&context, g: g, input: input, fx: fx, alpha: 1 - e, guitarAlpha: guitarAlpha, bandAlpha: bandAlpha, pulse: pulse) }
         if let loop = input.loop ?? fx.lastLoop {
             if input.loop != nil { fx.lastLoop = input.loop }
             drawLoop(&context, g: g, input: input, loop: loop, e: e, guitarAlpha: guitarAlpha, bandAlpha: bandAlpha, pulse: pulse)
-            if e > 0.02 { drawRingHUD(&context, g: g, input: input, e: e) }
+            if e > 0.02 { drawRingHUD(&context, g: g, input: input, e: e, lapPulse: fx.lapPulse) }
+            if fx.shockwave > 0 { drawShockwave(&context, g: g, strength: fx.shockwave) }
         }
         if fx.ring == 0, fx.ringTarget == 0 { fx.lastLoop = nil }
         emitAndDrawParticles(&context, g: g, input: input, fx: fx, e: e)
@@ -82,6 +88,9 @@ enum ArenaScene {
         fx.ring += (fx.ringTarget - fx.ring) * min(1, dt * 5.5)
         if abs(fx.ringTarget - fx.ring) < 0.002 { fx.ring = fx.ringTarget }
         fx.bannerLife = max(0, fx.bannerLife - dt * 0.7)
+        fx.entrance = min(1, fx.entrance + dt / 1.1)
+        fx.shockwave = max(0, fx.shockwave - dt * 1.6)
+        fx.lapPulse = max(0, fx.lapPulse - dt * 2.2)
         fx.shake = max(0, fx.shake - dt * 3)
         let k = dt * 60
         fx.particles = fx.particles.compactMap { p -> ArenaFX.Particle? in
@@ -132,7 +141,7 @@ enum ArenaScene {
 
     // MARK: Tape
 
-    private static func drawTape(_ context: inout GraphicsContext, g: ArenaGeometry, input: Input, alpha: Double,
+    private static func drawTape(_ context: inout GraphicsContext, g: ArenaGeometry, input: Input, fx: ArenaFX, alpha: Double,
                                  guitarAlpha: Double, bandAlpha: Double, pulse: Double) {
         let now = input.now, map = input.map
         let visible = Double(g.cx / ArenaGeometry.pointsPerSecond)
@@ -179,8 +188,9 @@ enum ArenaScene {
             defer { x += 3 }
             guard t >= 0, t <= map.duration else { continue }
             if let loop = input.loop, loop.contains(t) { continue }
-            let hb = CGFloat(map.bandLevel(at: t)) * g.maxHeight
-            let hg = CGFloat(map.guitarLevel(at: t)) * g.maxHeight * 0.8
+            let grow = CGFloat(ease(min(1, max(0, fx.entrance * 1.5 - Double(abs(x - g.cx) / g.size.width) * 1.0))))
+            let hb = CGFloat(map.bandLevel(at: t)) * g.maxHeight * grow
+            let hg = CGFloat(map.guitarLevel(at: t)) * g.maxHeight * 0.8 * grow
             let past = t < now
             if hb > 0.5 {
                 if past { addBar(&bandPast, x: x, y: g.cy, half: hb) } else { addBar(&bandNext, x: x, y: g.cy, half: hb) }
@@ -270,10 +280,19 @@ enum ArenaScene {
         glowStroke(&context, guitar, color: RX.Palette.fire, alpha: guitarAlpha, width: width)
     }
 
-    private static func drawRingHUD(_ context: inout GraphicsContext, g: ArenaGeometry, input: Input, e: Double) {
+    private static func drawRingHUD(_ context: inout GraphicsContext, g: ArenaGeometry, input: Input, e: Double, lapPulse: Double) {
         let c = g.ringCenter
         var hud = context
         hud.opacity = e
+        // Lap flash: the meter's track lights up for a moment on every completed lap.
+        if lapPulse > 0 {
+            var flash = hud
+            flash.blendMode = .plusLighter
+            flash.addFilter(.shadow(color: RX.Palette.magenta, radius: 10))
+            flash.stroke(Path(ellipseIn: CGRect(x: c.x - g.meterRadius, y: c.y - g.meterRadius,
+                                                width: 2 * g.meterRadius, height: 2 * g.meterRadius)),
+                         with: .color(RX.Palette.magenta.opacity(0.6 * lapPulse)), lineWidth: CGFloat(2 + 8 * lapPulse))
+        }
         // Speed meter: one segment per 5%, from 40% to 100%.
         let segments = 12, gap = 0.035
         let fraction = (input.speed - 0.4) / 0.6
@@ -316,6 +335,18 @@ enum ArenaScene {
             hud.draw(Text("gire o anel para mudar a velocidade").font(.caption).foregroundStyle(RX.Palette.textTertiary),
                      at: CGPoint(x: c.x, y: c.y + g.meterRadius + 28))
         }
+    }
+
+    /// A ring of light expanding from the riff as it is caught.
+    private static func drawShockwave(_ context: inout GraphicsContext, g: ArenaGeometry, strength: Double) {
+        let t = 1 - strength
+        let radius = g.ringRadius * CGFloat(1 + 1.6 * ease(t))
+        let c = g.ringCenter
+        var wave = context
+        wave.blendMode = .plusLighter
+        wave.addFilter(.shadow(color: RX.Palette.magenta, radius: 12))
+        wave.stroke(Path(ellipseIn: CGRect(x: c.x - radius, y: c.y - radius, width: 2 * radius, height: 2 * radius)),
+                    with: .color(RX.Palette.fireLight.opacity(0.8 * strength)), lineWidth: CGFloat(1 + 7 * strength))
     }
 
     // MARK: Particles and banner

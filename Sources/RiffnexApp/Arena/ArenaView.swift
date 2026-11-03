@@ -40,6 +40,8 @@ struct ArenaView: View {
     @AppStorage("rx.showNeck") private var showNeck = true
     @State private var showingAbout = false
     @State private var showingTuning = false
+    /// First-time guide: 0 focus, 1 catch a riff, 2 turn the ring, 3 done.
+    @AppStorage("rx.coachStep") private var coachStep = 0
     @State private var renaming: SavedRiff?
     @State private var renameText = ""
     @Environment(\.dismiss) private var dismiss
@@ -86,8 +88,14 @@ struct ArenaView: View {
                     // Guidance and ring actions sit under the HUD, leaving the floor to the neck.
                     if model.loop != nil {
                         ringBar
-                    } else if model.riffs.isEmpty {
+                    } else if model.riffs.isEmpty, coachStep >= CoachCard.steps {
                         hints
+                    }
+                    if coachStep < CoachCard.steps {
+                        CoachCard(step: coachStep) { withAnimation(RX.Motion.spatial) { coachStep = CoachCard.steps } }
+                            .padding(.top, RX.Space.s)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .id(coachStep)
                     }
                     if !model.riffs.isEmpty { riffChips }
                     Spacer()
@@ -99,6 +107,7 @@ struct ArenaView: View {
                     model.setFocus(value)
                 } onEnd: {
                     show(model.settleFocus().map(Self.focusName) ?? Self.focusLabel(model.focus))
+                    advanceCoach(from: 0)
                 }
                 .frame(width: 34, height: size.height * 0.34)
                 .position(x: size.width - 21, y: size.height * 0.45)
@@ -455,18 +464,30 @@ struct ArenaView: View {
             if t.wasPlaying { model.togglePlay() }
         case .focus:
             show(model.settleFocus().map(Self.focusName) ?? Self.focusLabel(model.focus))
+            advanceCoach(from: 0)
         case .select:
             if let selection, let region = LoopRegion(start: selection.lowerBound, end: selection.upperBound, duration: model.duration) {
                 model.catchRiff(region)
+                advanceCoach(from: 1)
                 show("Riff preso · " + ArenaScene.selectionLabel(selection, map: model.map).lowercased())
             }
             selection = nil
         case nil, .tap:
             model.togglePlay()
-        case .speed, .focusOnly:
+        case .speed:
+            if coachStep == 2 {
+                advanceCoach(from: 2)
+                show("Pronto. Agora é com você")
+            }
+        case .focusOnly:
             break
         }
         touch = nil
+    }
+
+    private func advanceCoach(from step: Int) {
+        guard coachStep == step else { return }
+        withAnimation(RX.Motion.spatial) { coachStep = step + 1 }
     }
 
     static func focusName(_ stop: Double) -> String {
@@ -670,5 +691,51 @@ struct TuningSuggestionCard: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(RX.Palette.surface.opacity(0.97)))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(RX.Palette.magenta.opacity(0.5)))
         .shadow(color: .black.opacity(0.5), radius: 20)
+    }
+}
+
+/// The first-time guide: one gesture at a time, moving on when you actually do it.
+struct CoachCard: View {
+    static let steps = 3
+    let step: Int
+    let skip: () -> Void
+
+    private var content: (symbol: String, title: String, text: String) {
+        switch step {
+        case 0: ("arrow.up.and.down", "Escolha o que ouvir",
+                 "Arraste para cima ou para baixo na fita. Para cima fica só a guitarra, para baixo a banda sem ela.")
+        case 1: ("hand.draw", "Prenda um riff",
+                 "Segure o dedo na fita e arraste para o lado. O trecho vira um anel que repete sem parar.")
+        default: ("arrow.triangle.2.circlepath", "Mude a velocidade",
+                  "Gire o dedo em volta do anel para tocar mais devagar ou mais rápido.")
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: RX.Space.s) {
+            Image(systemName: content.symbol)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(RX.brandGradient)
+                .symbolEffect(.bounce, options: .repeat(.periodic(delay: 1.2)))
+                .frame(width: 34)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(content.title.uppercased()).font(.rxHUD(11, weight: .heavy)).foregroundStyle(RX.Palette.textPrimary)
+                    Spacer()
+                    Text("\(step + 1) de \(Self.steps)").font(.rxHUD(9, weight: .medium)).foregroundStyle(RX.Palette.textTertiary)
+                }
+                Text(content.text).font(.footnote).foregroundStyle(RX.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Pular o guia", action: skip)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(RX.Palette.cyan)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(RX.Space.s)
+        .background(RoundedRectangle(cornerRadius: 12).fill(RX.Palette.surface.opacity(0.95)))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(RX.Palette.magenta.opacity(0.45)))
+        .shadow(color: RX.Palette.magenta.opacity(0.25), radius: 14)
+        .accessibilityElement(children: .combine)
     }
 }

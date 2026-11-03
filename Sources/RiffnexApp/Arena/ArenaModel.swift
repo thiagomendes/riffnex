@@ -300,6 +300,7 @@ final class ArenaModel {
         player.seek(to: region.start)
         lastTime = region.start
         fx.setRing(true, animated: animated)
+        if animated { fx.shockwave = 1 }
         if animated {
             if speed > 0.7 { setSpeed(0.7, haptic: false) }
             if !player.isPlaying { togglePlay() }
@@ -343,6 +344,7 @@ final class ArenaModel {
 
     private func completedLap() {
         laps += 1
+        fx.lapPulse = 1
         lapHaptic.impactOccurred(intensity: 0.6)
         guard ramping else { return }
         lapsAtThisSpeed += 1
@@ -378,6 +380,12 @@ final class ArenaFX {
     var ringTarget = 0.0
     /// The loop still being drawn while the ring unrolls after a release.
     var lastLoop: LoopRegion?
+    /// 0 → 1 over the first second on screen: the tape lights up from the playhead outward.
+    var entrance = 0.0
+    /// 1 when a riff is caught, fading: a shockwave from the ring.
+    var shockwave = 0.0
+    /// 1 on every completed lap, fading: the speed meter flashes.
+    var lapPulse = 0.0
 
     func setRing(_ on: Bool, animated: Bool) {
         ringTarget = on ? 1 : 0
