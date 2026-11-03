@@ -40,6 +40,8 @@ struct ArenaView: View {
     @AppStorage("rx.showNeck") private var showNeck = true
     @State private var showingAbout = false
     @State private var showingTuning = false
+    @State private var renaming: SavedRiff?
+    @State private var renameText = ""
     @Environment(\.dismiss) private var dismiss
 
     init(song: SongRecord, map: RiffMap, app: AppModel) {
@@ -82,11 +84,12 @@ struct ArenaView: View {
                 VStack(spacing: 0) {
                     hud
                     // Guidance and ring actions sit under the HUD, leaving the floor to the neck.
-                    if model.loop == nil {
-                        hints
-                    } else {
+                    if model.loop != nil {
                         ringBar
+                    } else if model.riffs.isEmpty {
+                        hints
                     }
+                    if !model.riffs.isEmpty { riffChips }
                     Spacer()
                     controls
                 }
@@ -188,6 +191,11 @@ struct ArenaView: View {
         }
         .background(RX.Palette.base.ignoresSafeArea())
         .sheet(isPresented: $showingAbout) { EstimatedNotesSheet() }
+        .alert("Nome do riff", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Riff", text: $renameText)
+            Button("Salvar") { if let renaming { model.rename(renaming, to: renameText) }; renaming = nil }
+            Button("Cancelar", role: .cancel) { renaming = nil }
+        }
         .sheet(isPresented: $showingTuning) {
             TuningSheet(current: model.tuning, currentShifted: model.playShifted,
                         suggestion: model.suggestion ?? model.detectedSuggestion) { preset, shifted in
@@ -258,11 +266,56 @@ struct ArenaView: View {
             }
             .buttonStyle(ArenaButtonStyle(prominent: !model.ramping, active: model.ramping))
             .accessibilityHint("Aumenta a velocidade 5% a cada duas voltas, até a velocidade real.")
+            Button {
+                if model.saveRiff() != nil { show("Riff salvo") }
+            } label: {
+                Image(systemName: model.currentRiffIsSaved ? "bookmark.fill" : "bookmark")
+            }
+            .buttonStyle(ArenaButtonStyle(prominent: false, active: model.currentRiffIsSaved))
+            .disabled(model.currentRiffIsSaved)
+            .accessibilityLabel(model.currentRiffIsSaved ? "Riff já salvo" : "Salvar este riff")
             Button("Soltar") { model.releaseRiff() }
                 .buttonStyle(ArenaButtonStyle(prominent: false, active: false))
                 .accessibilityHint("Solta o trecho e volta para a música inteira.")
         }
         .padding(.top, RX.Space.s)
+    }
+
+    /// Saved riffs: one tap catches the riff in the ring again.
+    private var riffChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: RX.Space.xs) {
+                ForEach(model.riffs) { riff in
+                    let active = model.loop == riff.region
+                    Button { model.play(riff); show(riff.name) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: active ? "bookmark.fill" : "bookmark")
+                            Text(riff.name)
+                            Text(TimeFormatting.clock(riff.region.start)).foregroundStyle(RX.Palette.textTertiary)
+                        }
+                        .font(.rxHUD(10))
+                        .foregroundStyle(active ? RX.Palette.fireLight : RX.Palette.textPrimary)
+                        .padding(.horizontal, 10).frame(height: 32)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(active ? RX.Palette.fire.opacity(0.16) : RX.Palette.surface.opacity(0.9)))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(active ? RX.Palette.fireLight.opacity(0.6) : RX.Palette.hairline))
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button { renaming = riff; renameText = riff.name } label: { Label("Renomear", systemImage: "pencil") }
+                        Button(role: .destructive) { withAnimation(RX.Motion.touch) { model.delete(riff) } } label: {
+                            Label("Apagar", systemImage: "trash")
+                        }
+                    }
+                    .accessibilityLabel("\(riff.name), começa em \(TimeFormatting.clock(riff.region.start))")
+                    .accessibilityAction(named: "Renomear") { renaming = riff; renameText = riff.name }
+                    .accessibilityAction(named: "Apagar") { model.delete(riff) }
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
+            .padding(.vertical, 2)
+            .animation(RX.Motion.celebrate, value: model.riffs)
+        }
+        .padding(.top, RX.Space.xs)
     }
 
     private var controls: some View {
