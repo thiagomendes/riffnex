@@ -1,0 +1,69 @@
+name: Site
+
+# Publishes site/ (riffnex.tmdevlab.com) to Azure Static Web Apps when the site changes.
+# Needs one repository secret, created by the owner:
+#   AZURE_STATIC_WEB_APPS_API_TOKEN  (Azure portal › the Static Web App › Manage deployment token)
+# Without it the job only checks the site and stops.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/m2-analysis", "main"]
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HAS_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the site
+        run: |
+          # Every page exists and every local link or asset it references is in site/.
+          python3 - <<'PY'
+          import os, re, sys
+          root = "site"
+          missing = []
+          for folder, _, files in os.walk(root):
+              for name in files:
+                  if not name.endswith(".html"):
+                      continue
+                  path = os.path.join(folder, name)
+                  html = open(path, encoding="utf-8").read()
+                  for ref in re.findall(r'(?:href|src)="([^"#]+)"', html):
+                      if ref.startswith(("http://", "https://", "mailto:")):
+                          continue
+                      target = os.path.normpath(os.path.join(root, ref.lstrip("/")) if ref.startswith("/")
+                                                else os.path.join(folder, ref))
+                      if os.path.isdir(target):
+                          target = os.path.join(target, "index.html")
+                      if not os.path.exists(target):
+                          missing.append(f"{path}: {ref}")
+          if missing:
+              print("Broken links:\n" + "\n".join(missing))
+              sys.exit(1)
+          print("Site OK")
+          PY
+
+      - name: Dry run note
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::AZURE_STATIC_WEB_APPS_API_TOKEN is not set yet. The site was checked; nothing was published."
+
+      - name: Publish to Azure Static Web Apps
+        if: env.HAS_TOKEN == 'true'
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: site
+          output_location: ""
+          skip_app_build: true
+          skip_api_build: true

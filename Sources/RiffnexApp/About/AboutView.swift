@@ -33,17 +33,23 @@ struct AboutView: View {
         .navigationTitle("Sobre")
         .navigationBarTitleDisplayMode(.inline)
         .task { measure() }
-        .confirmationDialog("Apagar os instrumentos separados?", isPresented: Binding(get: { pendingRemoval != nil },
-                                                                                      set: { if !$0 { pendingRemoval = nil } }),
+        .confirmationDialog("O que fazer com “\(pendingRemoval?.title ?? "")”?",
+                            isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),
                             titleVisibility: .visible, presenting: pendingRemoval) { song in
-            Button("Apagar de “\(song.title)”", role: .destructive) {
+            Button("Liberar espaço") {
                 Task {
                     await app.prep.removePreparation(song.id)
                     measure()
                 }
             }
+            Button("Remover da biblioteca", role: .destructive) {
+                Task {
+                    await app.delete(song)
+                    measure()
+                }
+            }
         } message: { _ in
-            Text("A música continua na biblioteca, com seus riffs salvos. Para praticar de novo, ela será separada outra vez.")
+            Text("Liberar espaço apaga só os instrumentos separados. A música fica na biblioteca, com os riffs salvos, e é separada de novo quando você abrir. Remover da biblioteca apaga a música do app. O arquivo original não é afetado.")
         }
     }
 
@@ -78,10 +84,10 @@ struct AboutView: View {
                                 .foregroundStyle(RX.Palette.textTertiary)
                         }
                         Spacer()
-                        Button("Apagar") { pendingRemoval = song }
+                        Button("Opções") { pendingRemoval = song }
                             .font(.footnote.weight(.semibold))
-                            .foregroundStyle(RX.Palette.error)
-                            .accessibilityLabel("Apagar os instrumentos separados de \(song.title)")
+                            .foregroundStyle(RX.Palette.cyan)
+                            .accessibilityLabel("Liberar espaço ou remover \(song.title)")
                     }
                     .padding(.vertical, 4)
                 }
