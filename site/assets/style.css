@@ -50,10 +50,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-
 .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 16px; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--fg); font: 700 15px/1 var(--font-hud); letter-spacing: 0.18em; }
 .brand:hover { text-decoration: none; }
-.brand img {
-  width: 42px; height: 42px; border-radius: 11px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 18px rgba(255, 61, 154, 0.35), 0 0 32px rgba(255, 106, 43, 0.18);
-}
+.brand .mark { width: 40px; height: 40px; filter: drop-shadow(0 0 10px rgba(255, 61, 154, 0.45)); transition: transform 0.6s cubic-bezier(.2, .8, .2, 1); }
+.brand:hover .mark { transform: rotate(30deg); }
 .brand span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 17px; }
 .nav { display: flex; gap: 22px; font: 600 13px/1 var(--font-hud); letter-spacing: 0.08em; text-transform: uppercase; }
 .nav a { color: var(--fg-2); }
@@ -68,6 +66,17 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-
   pointer-events: none;
 }
 .hero .wrap { position: relative; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; }
+.appcard { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+.appcard img {
+  width: 88px; height: 88px; border-radius: 22px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 12px 40px rgba(255, 61, 154, 0.35), 0 0 60px rgba(255, 106, 43, 0.2);
+}
+.appcard strong { display: block; font: 400 24px/1 var(--font-big); letter-spacing: 0.04em; }
+.appcard span { display: block; font: 500 13px/1.4 var(--font-hud); color: var(--fg-2); margin-top: 6px; }
+.appcard .soonpill {
+  display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 999px; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--cyan); border: 1px solid rgba(51, 225, 255, 0.4); background: rgba(51, 225, 255, 0.08);
+}
 .eyebrow { font: 700 12px/1 var(--font-hud); letter-spacing: 0.22em; text-transform: uppercase; color: var(--magenta); }
 h1 {
   font: 400 clamp(40px, 6.4vw, 76px)/0.98 var(--font-big);
