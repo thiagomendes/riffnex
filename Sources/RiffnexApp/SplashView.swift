@@ -1,7 +1,7 @@
 import DesignSystem
 import SwiftUI
 
-/// About a second of brand on a cold launch: the ring's segments light up one by one, the
+/// About two seconds of brand on a cold launch: the ring's segments light up one by one, the
 /// playhead drops in, the name appears, and everything dissolves into the library.
 /// A tap skips it. With Reduce Motion it is a short fade.
 struct SplashView: View {
@@ -73,21 +73,22 @@ struct SplashView: View {
             return
         }
         for i in 1...Self.segments {
-            withAnimation(.easeOut(duration: 0.18)) { lit = i }
-            try? await Task.sleep(for: .milliseconds(38))
+            withAnimation(.easeOut(duration: 0.28)) { lit = i }
+            try? await Task.sleep(for: .milliseconds(75))
         }
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { needle = true }
-        try? await Task.sleep(for: .milliseconds(120))
-        withAnimation(.easeOut(duration: 0.4)) { name = true }
-        try? await Task.sleep(for: .milliseconds(520))
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) { needle = true }
+        try? await Task.sleep(for: .milliseconds(220))
+        withAnimation(.easeOut(duration: 0.6)) { name = true }
+        // Hold the finished picture for a moment before dissolving into the library.
+        try? await Task.sleep(for: .milliseconds(1000))
         finish()
     }
 
     private func finish() {
         guard !leaving else { return }
-        withAnimation(.easeIn(duration: 0.35)) { leaving = true }
+        withAnimation(.easeIn(duration: 0.45)) { leaving = true }
         Task {
-            try? await Task.sleep(for: .milliseconds(360))
+            try? await Task.sleep(for: .milliseconds(460))
             done()
         }
     }
