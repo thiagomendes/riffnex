@@ -66,7 +66,7 @@ public enum LibraryError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .unsupportedSchema(let version): "A biblioteca foi salva por uma versão mais nova do app (esquema \(version))."
+        case .unsupportedSchema: "Sua biblioteca foi salva por uma versão mais nova do RIFFNEX. Atualize o app para abri-la."
         case .unknownSong: "Música não encontrada na biblioteca."
         }
     }

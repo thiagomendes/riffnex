@@ -54,8 +54,8 @@ public actor StemSeparator {
 
         public var errorDescription: String? {
             switch self {
-            case .missingModel: "O modelo de separação de instrumentos não está no app."
-            case .unexpectedOutput(let detail): "O modelo de separação respondeu num formato inesperado (\(detail))."
+            case .missingModel: "O separador de instrumentos não está no app. Reinstale o RIFFNEX."
+            case .unexpectedOutput(let detail): "A separação não funcionou neste iPhone. Detalhe técnico: \(detail)."
             }
         }
     }

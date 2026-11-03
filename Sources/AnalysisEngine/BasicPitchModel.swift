@@ -38,9 +38,9 @@ public actor BasicPitchModel {
 
         public var errorDescription: String? {
             switch self {
-            case .missingResource: "O modelo Basic Pitch não foi encontrado no pacote do app."
-            case .missingOutput(let name): "O modelo não produziu a saída esperada: \(name)."
-            case .notCompiled: "O modelo ainda não foi preparado neste aparelho."
+            case .missingResource: "O leitor de notas não está no app. Reinstale o RIFFNEX."
+            case .missingOutput(let name): "O leitor de notas respondeu num formato inesperado (\(name))."
+            case .notCompiled: "O leitor de notas ainda não foi preparado neste iPhone."
             }
         }
     }

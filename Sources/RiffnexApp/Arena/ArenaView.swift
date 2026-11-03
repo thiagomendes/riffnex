@@ -548,14 +548,14 @@ struct EstimatedNotesSheet: View {
                         .font(.rxHUD(20, weight: .heavy))
                         .foregroundStyle(RX.Palette.textPrimary)
                     Text("O RIFFNEX separa a guitarra da música e tenta adivinhar as notas a partir dela, no próprio iPhone. Ninguém transcreveu esta música: o braço, as casas e a animação são uma sugestão.")
-                    Text("Erra mais quando:").font(.headline).foregroundStyle(RX.Palette.textPrimary)
+                    Text("Ele erra mais quando:").font(.headline).foregroundStyle(RX.Palette.textPrimary)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("• a guitarra tem muita distorção ou toca acordes;")
-                        Text("• há duas guitarras ou outro instrumento parecido;")
-                        Text("• a gravação tem pouca qualidade;")
-                        Text("• a guitarra está afinada fora do padrão (meio tom abaixo, drop D…): as notas podem estar certas e as casas, não. Troque no botão \"Afinação\", que também ajuda a afinar a guitarra de ouvido.")
+                        Text("• A guitarra tem muita distorção ou toca acordes.")
+                        Text("• Há duas guitarras ou outro instrumento parecido.")
+                        Text("• A gravação tem pouca qualidade.")
+                        Text("• A guitarra está afinada fora do padrão, como meio tom abaixo ou drop D. Aí as notas podem estar certas e as casas, não. Troque no botão Afinação, que também ajuda a afinar a guitarra de ouvido.")
                     }
-                    Text("Notas vazadas e tracejadas são as que o app tem menos certeza. A casa e o dedo são uma forma confortável de tocar; o guitarrista original pode ter usado outra.")
+                    Text("As notas vazadas e tracejadas são aquelas de que o app tem menos certeza. A casa indicada é uma forma confortável de tocar, mas o guitarrista original pode ter usado outra.")
                     Text("Na dúvida, confie no ouvido: deixe só a guitarra, diminua a velocidade e prenda o trecho no anel.")
                         .foregroundStyle(RX.Palette.fireLight)
                 }

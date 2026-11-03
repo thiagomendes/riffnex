@@ -67,7 +67,7 @@ final class PrepCenter {
         self.store = store
         if let data = UserDefaults.standard.data(forKey: Self.breadcrumbKey),
            let crumb = try? JSONDecoder().decode(Breadcrumb.self, from: data) {
-            failures[crumb.songID] = "Na última tentativa o app fechou em \(crumb.percent)%. Memória livre para o app: \(crumb.startMemoryMB) MB no início, \(crumb.memoryMB) MB no fim. Me mande esses números. Toque em Tentar de novo para recomeçar."
+            failures[crumb.songID] = "Na última tentativa o app fechou durante a separação, em \(crumb.percent)%. Isso costuma acontecer quando falta memória. Feche os outros apps e toque em Tentar de novo."
             UserDefaults.standard.removeObject(forKey: Self.breadcrumbKey)
         }
     }
@@ -245,7 +245,7 @@ final class PrepCenter {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if let id = self.current?.songID {
-                    self.failures[id] = "Parou porque o RIFFNEX saiu da tela. Deixe o app aberto e toque para recomeçar."
+                    self.failures[id] = "A separação parou porque o RIFFNEX saiu da tela. Deixe o app aberto e toque em Tentar de novo."
                 }
                 self.task?.cancel()
                 self.endBackgroundTime()

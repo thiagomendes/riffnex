@@ -146,7 +146,7 @@ private struct EmptyLibrary: View {
             }
             .font(.rxDisplay(.largeTitle))
             .padding(.top, RX.Space.xxl)
-            Text("Sua biblioteca está vazia. Importe uma música que é sua para começar.")
+            Text("Importe uma música sua. O RIFFNEX separa a guitarra do resto da banda no iPhone, para você ouvir, desacelerar e repetir cada riff até conseguir tocar.")
                 .font(.body)
                 .foregroundStyle(RX.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)

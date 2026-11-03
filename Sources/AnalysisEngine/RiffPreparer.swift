@@ -33,8 +33,8 @@ public actor RiffPreparer {
 
         public var errorDescription: String? {
             switch self {
-            case .tooShort: "O áudio é curto demais."
-            case .modelMissing: "O modelo de separação não está no app."
+            case .tooShort: "A música é curta demais para separar."
+            case .modelMissing: "O separador de instrumentos não está no app. Reinstale o RIFFNEX."
             }
         }
     }
