@@ -51,6 +51,7 @@ Dados coletados: nenhum. Responda "Não, não coletamos dados deste app".
 ## URLs
 - Política de privacidade: https://riffnex.tmdevlab.com/privacidade/
 - Suporte: https://riffnex.tmdevlab.com/suporte/
+- Termos de uso: https://riffnex.tmdevlab.com/termos/ (no App Store Connect, em Informações do app › Contrato de licença, pode manter o contrato padrão da Apple. Os termos do site complementam.)
 - Site de marketing (opcional): https://riffnex.tmdevlab.com/
 
 Desenvolvedor exibido na loja: TM Dev Lab (vem do nome da conta Apple Developer).

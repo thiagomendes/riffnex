@@ -11,6 +11,7 @@ struct AboutView: View {
 
     private static let privacyURL = URL(string: "https://riffnex.tmdevlab.com/privacidade/")!
     private static let supportURL = URL(string: "https://riffnex.tmdevlab.com/suporte/")!
+    private static let termsURL = URL(string: "https://riffnex.tmdevlab.com/termos/")!
 
     var body: some View {
         ZStack {
@@ -96,9 +97,10 @@ struct AboutView: View {
     }
 
     private var links: some View {
-        section("Privacidade e suporte") {
+        section("Privacidade, termos e suporte") {
             Link(destination: Self.privacyURL) { linkRow("Política de privacidade", symbol: "hand.raised") }
             Link(destination: Self.supportURL) { linkRow("Ajuda e contato", symbol: "questionmark.circle") }
+            Link(destination: Self.termsURL) { linkRow("Termos de uso", symbol: "doc.text") }
         }
     }
 

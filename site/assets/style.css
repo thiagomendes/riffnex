@@ -50,7 +50,11 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-
 .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 16px; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--fg); font: 700 15px/1 var(--font-hud); letter-spacing: 0.18em; }
 .brand:hover { text-decoration: none; }
-.brand img { width: 34px; height: 34px; border-radius: 9px; }
+.brand img {
+  width: 42px; height: 42px; border-radius: 11px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 18px rgba(255, 61, 154, 0.35), 0 0 32px rgba(255, 106, 43, 0.18);
+}
+.brand span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 17px; }
 .nav { display: flex; gap: 22px; font: 600 13px/1 var(--font-hud); letter-spacing: 0.08em; text-transform: uppercase; }
 .nav a { color: var(--fg-2); }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--fg); text-decoration: none; }
