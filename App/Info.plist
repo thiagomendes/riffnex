@@ -12,7 +12,7 @@
 		<string>pt-BR</string>
 	</array>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>UIDeviceFamily</key>
@@ -22,8 +22,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
@@ -34,6 +32,29 @@
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIFileSharingEnabled</key>
+	<false/>
+	<!-- "Abrir no RIFFNEX" for audio files in Files and the Share menu (the file is copied in). -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Áudio</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.audio</string>
+				<string>public.mp3</string>
+				<string>public.mpeg-4-audio</string>
+				<string>com.microsoft.waveform-audio</string>
+				<string>public.aiff-audio</string>
+				<string>com.apple.coreaudio-format</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>

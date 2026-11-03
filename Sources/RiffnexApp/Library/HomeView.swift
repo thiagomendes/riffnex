@@ -72,6 +72,15 @@ struct HomeView: View {
                 .foregroundStyle(RX.Palette.textSecondary)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
+            NavigationLink {
+                AboutView()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(RX.Palette.textSecondary)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Sobre o RIFFNEX e espaço usado")
         }
         .frame(minHeight: 44)
     }

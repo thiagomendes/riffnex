@@ -28,5 +28,11 @@ struct RootView: View {
                 }
         }
         .task { await app.bootstrap() }
+        // A file opened from Files or the Share menu ("Abrir no RIFFNEX") is imported like a picked one.
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            path.removeAll()
+            app.importFile(at: url)
+        }
     }
 }

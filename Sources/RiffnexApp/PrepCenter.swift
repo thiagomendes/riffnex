@@ -151,6 +151,30 @@ final class PrepCenter {
         if current?.songID == id { task?.cancel() }
     }
 
+    /// Deletes a song's separated instruments and everything measured from them, to free space.
+    /// The song stays in the library and can be prepared again.
+    func removePreparation(_ id: UUID) async {
+        forget(id)
+        let folder = store.folder(for: id)
+        for name in [PrepCenter.stemsDirectoryName] {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(name, isDirectory: true))
+        }
+        try? await store.removeRiffMap(for: id)
+        try? FileManager.default.removeItem(at: store.noteMapURL(for: id))
+        known.insert(id) // nothing left to load
+    }
+
+    /// Bytes used by a song's separated instruments.
+    func separatedBytes(_ id: UUID) -> Int64 {
+        let folder = store.folder(for: id).appendingPathComponent(PrepCenter.stemsDirectoryName, isDirectory: true)
+        guard let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in files {
+            total += Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
+    }
+
     func forget(_ id: UUID) {
         cancel(id)
         noteQueue.removeAll { $0 == id }
