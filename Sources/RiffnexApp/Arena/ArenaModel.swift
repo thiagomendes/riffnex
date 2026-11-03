@@ -57,6 +57,9 @@ final class ArenaModel {
         practicedSeconds = state.practicedSeconds
         tuning = state.tuning.flatMap(TuningPreset.init(rawValue:)) ?? .standard
         tuningAnswered = state.tuningAnswered ?? false
+        playShifted = (state.playShifted ?? false) && tuning.playableShift != nil
+        player.setTranspose(semitones: shift)
+        riffs = state.riffs ?? []
         setSpeed(Self.speedRange.contains(state.rate) ? state.rate : 1, haptic: false)
         if let saved = state.loop, state.loopEnabled {
             catchRiff(saved, animated: false)
@@ -80,7 +83,8 @@ final class ArenaModel {
         player.pause()
         practicedSeconds += player.takePracticedSeconds()
         let state = StudioState(position: player.currentTime, rate: speed, loop: loop, loopEnabled: loop != nil,
-                                practicedSeconds: practicedSeconds, tuning: tuning.rawValue, tuningAnswered: tuningAnswered)
+                                practicedSeconds: practicedSeconds, tuning: tuning.rawValue, tuningAnswered: tuningAnswered,
+                                playShifted: playShifted, riffs: riffs)
         await app.save(state, for: song)
         player.unload()
     }
@@ -93,43 +97,64 @@ final class ArenaModel {
 
     // MARK: Tuning
 
-    /// The tuning the neck is drawn for.
+    /// The tuning the song was recorded in (as chosen for this song).
     private(set) var tuning: TuningPreset = .standard
-    /// The guessed notes placed on the neck for `tuning`.
+    /// Play the song raised so it fits the guitar in `tuning.playableShift.target`.
+    private(set) var playShifted = false
+    /// The guessed notes placed on the neck for the tuning you play in.
     private(set) var neck: NeckNotes?
-    /// What the guitar is built on, beat by beat (E5, G, Am…).
+    /// What the guitar is built on, beat by beat (E5, G, Am…), as you hear it.
     private(set) var roots: [RootSpan] = []
-    /// The song's key, when known.
-    var key: SongKey? { notes?.key }
     /// A suggested tuning, shown until the user answers it.
     private(set) var suggestion: TuningSuggestion?
     private(set) var tuningAnswered = false
 
-    /// Places the notes on the neck for the current tuning (off the main actor) and looks for a
+    /// Semitones the song is raised by (0 unless playing shifted).
+    var shift: Int { playShifted ? (tuning.playableShift?.semitones ?? 0) : 0 }
+    /// The tuning your guitar should be in to follow the neck.
+    var playingTuning: TuningPreset { playShifted ? (tuning.playableShift?.target ?? tuning) : tuning }
+
+    /// The song's key as you hear it now.
+    var key: SongKey? {
+        guard var key = notes?.key else { return nil }
+        key.tonic = key.tonic.transposed(by: shift)
+        return key
+    }
+
+    /// Places the notes on the neck for the tuning you play in (off the main actor) and looks for a
     /// tuning suggestion. Called when the notes arrive or the tuning changes.
     func refreshNeck() async {
         guard let notes else { neck = nil; return }
-        let detected = notes.detected
-        let preset = tuning
+        let semitones = shift
+        let detected = notes.detected.map { note -> DetectedNote in
+            var note = note
+            note.midi += semitones
+            return note
+        }
+        let preset = playingTuning
         let beats = map.beats, duration = map.duration
         let (placed, track) = await Task.detached(priority: .userInitiated) {
             (NoteMapBuilder.arrange(detected, tuning: preset.tuning), RootTrack.build(detected, beats: beats, duration: duration))
         }.value
-        guard preset == tuning else { return }
+        guard preset == playingTuning, semitones == shift else { return }
         neck = placed
         roots = track
-        if !tuningAnswered, let found = TuningDetector.suggest(detected), found.preset != tuning {
+        if !tuningAnswered, let found = TuningDetector.suggest(notes.detected), found.preset != tuning {
             suggestion = found
         } else {
             suggestion = nil
         }
     }
 
-    func choose(_ preset: TuningPreset) {
+    /// Sets the song's tuning and whether to raise it to the standard equivalent.
+    func choose(_ preset: TuningPreset, shifted: Bool = false) {
         tuningAnswered = true
         suggestion = nil
-        guard preset != tuning else { return }
+        let shifted = shifted && preset.playableShift != nil
+        guard preset != tuning || shifted != playShifted else { return }
         tuning = preset
+        playShifted = shifted
+        player.setTranspose(semitones: shift)
         neck = nil
         stepHaptic.selectionChanged()
         Task { await refreshNeck() }
@@ -143,6 +168,39 @@ final class ArenaModel {
     func dismissSuggestion() {
         tuningAnswered = true
         suggestion = nil
+    }
+
+    // MARK: Saved riffs
+
+    private(set) var riffs: [SavedRiff] = []
+
+    /// Saves the riff in the ring under the next free name ("Riff 1", "Riff 2"…).
+    @discardableResult
+    func saveRiff() -> SavedRiff? {
+        guard let loop, !riffs.contains(where: { $0.region == loop }) else { return nil }
+        var number = riffs.count + 1
+        while riffs.contains(where: { $0.name == "Riff \(number)" }) { number += 1 }
+        let riff = SavedRiff(name: "Riff \(number)", region: loop)
+        riffs.append(riff)
+        riffs.sort { $0.region.start < $1.region.start }
+        bigHaptic.impactOccurred()
+        return riff
+    }
+
+    var currentRiffIsSaved: Bool { loop.map { l in riffs.contains { $0.region == l } } ?? false }
+
+    func play(_ riff: SavedRiff) {
+        catchRiff(riff.region)
+    }
+
+    func rename(_ riff: SavedRiff, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = riffs.firstIndex(of: riff) else { return }
+        riffs[index].name = String(trimmed.prefix(24))
+    }
+
+    func delete(_ riff: SavedRiff) {
+        riffs.removeAll { $0.id == riff.id }
     }
 
     var isPlaying: Bool { player.isPlaying }

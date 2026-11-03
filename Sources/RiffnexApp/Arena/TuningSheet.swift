@@ -105,18 +105,23 @@ final class ReferenceTones {
 /// Choose the tuning for the neck and tune the guitar by ear.
 struct TuningSheet: View {
     let current: TuningPreset
+    let currentShifted: Bool
     let suggestion: TuningSuggestion?
-    let choose: (TuningPreset) -> Void
+    let choose: (TuningPreset, Bool) -> Void
     @State private var selected: TuningPreset
+    @State private var shifted: Bool
     @State private var playing: Int?
     @State private var tones = ReferenceTones()
     @Environment(\.dismiss) private var dismiss
 
-    init(current: TuningPreset, suggestion: TuningSuggestion?, choose: @escaping (TuningPreset) -> Void) {
+    init(current: TuningPreset, currentShifted: Bool, suggestion: TuningSuggestion?,
+         choose: @escaping (TuningPreset, Bool) -> Void) {
         self.current = current
+        self.currentShifted = currentShifted
         self.suggestion = suggestion
         self.choose = choose
         _selected = State(initialValue: current)
+        _shifted = State(initialValue: currentShifted)
     }
 
     var body: some View {
@@ -124,6 +129,7 @@ struct TuningSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: RX.Space.l) {
                     presets
+                    shiftOption
                     tuner
                 }
                 .padding(RX.Space.m)
@@ -134,7 +140,8 @@ struct TuningSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fechar") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Usar") { choose(selected); dismiss() }.disabled(selected == current)
+                    Button("Usar") { choose(selected, shifted && selected.playableShift != nil); dismiss() }
+                        .disabled(selected == current && (shifted && selected.playableShift != nil) == currentShifted)
                 }
             }
         }
@@ -184,6 +191,36 @@ struct TuningSheet: View {
         }
     }
 
+    /// The tuning your guitar should be in: the song's, or its standard equivalent when raising the song.
+    private var guitarTuning: TuningPreset {
+        shifted ? (selected.playableShift?.target ?? selected) : selected
+    }
+
+    @ViewBuilder
+    private var shiftOption: some View {
+        if let shift = selected.playableShift {
+            VStack(alignment: .leading, spacing: RX.Space.xs) {
+                Toggle(isOn: $shifted.animation(RX.Motion.touch)) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Tocar com a guitarra em \(shift.target.title.lowercased())")
+                            .font(.body.weight(.semibold)).foregroundStyle(RX.Palette.textPrimary)
+                        Text(shift.semitones == 1
+                             ? "O app sobe a música meio tom, sem mudar a velocidade. Você não precisa reafinar a guitarra."
+                             : "O app sobe a música um tom, sem mudar a velocidade. Você não precisa reafinar a guitarra.")
+                            .font(.footnote).foregroundStyle(RX.Palette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(RX.Palette.magenta)
+                .onChange(of: shifted) { tones.stop(); playing = nil }
+            }
+            .padding(RX.Space.s)
+            .background(RoundedRectangle(cornerRadius: 10).fill(RX.Palette.surface))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(shifted ? RX.Palette.magenta.opacity(0.6) : RX.Palette.hairline))
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
     private var tuner: some View {
         VStack(alignment: .leading, spacing: RX.Space.s) {
             Text("AFINAR DE OUVIDO").font(.rxHUD(10)).foregroundStyle(RX.Palette.textTertiary)
@@ -193,10 +230,10 @@ struct TuningSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             // From the 6th (lowest) string at the top, as you see the guitar when you look down at it.
             VStack(spacing: 0) {
-                ForEach(Array(selected.openStrings.enumerated()), id: \.offset) { index, midi in
+                ForEach(Array(guitarTuning.openStrings.enumerated()), id: \.offset) { index, midi in
                     StringRow(number: 6 - index, midi: midi, color: NeckScene.laneColors[index],
                               thickness: CGFloat(4.2 - 0.5 * Double(index)), playing: playing == index,
-                              preferFlats: selected == .halfDown) {
+                              preferFlats: guitarTuning == .halfDown) {
                         if playing == index {
                             tones.stop()
                             playing = nil

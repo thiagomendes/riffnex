@@ -45,11 +45,18 @@ public struct StudioState: Codable, Sendable, Hashable {
     public var tuning: String?
     /// The user already answered the tuning suggestion for this song.
     public var tuningAnswered: Bool?
+    /// Play the song raised to the tuning's standard equivalent (`TuningPreset.playableShift`).
+    public var playShifted: Bool?
+    /// Riffs saved by the user.
+    public var riffs: [SavedRiff]?
 
     public static let rateRange: ClosedRange<Double> = 0.25...1.25
 
     public init(position: Seconds = 0, rate: Double = 1, loop: LoopRegion? = nil, loopEnabled: Bool = false,
-                practicedSeconds: Double = 0, tuning: String? = nil, tuningAnswered: Bool? = nil) {
+                practicedSeconds: Double = 0, tuning: String? = nil, tuningAnswered: Bool? = nil,
+                playShifted: Bool? = nil, riffs: [SavedRiff]? = nil) {
+        self.playShifted = playShifted
+        self.riffs = riffs
         self.tuning = tuning
         self.tuningAnswered = tuningAnswered
         self.position = max(0, position)
@@ -57,6 +64,19 @@ public struct StudioState: Codable, Sendable, Hashable {
         self.loop = loop
         self.loopEnabled = loopEnabled && loop != nil
         self.practicedSeconds = max(0, practicedSeconds)
+    }
+}
+
+/// A riff the user caught and kept, to jump back to it.
+public struct SavedRiff: Codable, Sendable, Hashable, Identifiable {
+    public var id: UUID
+    public var name: String
+    public var region: LoopRegion
+
+    public init(id: UUID = UUID(), name: String, region: LoopRegion) {
+        self.id = id
+        self.name = name
+        self.region = region
     }
 }
 

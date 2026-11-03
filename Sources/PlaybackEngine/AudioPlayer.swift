@@ -23,6 +23,8 @@ public final class AudioPlayer {
     public private(set) var isPlaying = false
     public private(set) var duration: Seconds = 0
     public private(set) var rate: Double = 1
+    /// Semitones the song is shifted by (pitch only).
+    public private(set) var transpose = 0
     public private(set) var loop: LoopRegion?
     public private(set) var loopEnabled = false
     public private(set) var lastError: String?
@@ -120,6 +122,8 @@ public final class AudioPlayer {
         for (name, volume) in stemVolumes { stemNodes[name]?.volume = volume }
         pausedFrame = 0
         startFrame = 0
+        transpose = 0
+        timePitch.pitch = 0
         loop = nil
         loopEnabled = false
         practiceAccumulator = 0
@@ -206,6 +210,13 @@ public final class AudioPlayer {
 
     public func skip(by seconds: Seconds) {
         seek(to: currentTime + seconds)
+    }
+
+    /// Transposes the whole song by `semitones` without changing its speed (−12…12).
+    public func setTranspose(semitones: Int) {
+        let clamped = min(max(semitones, -12), 12)
+        transpose = clamped
+        timePitch.pitch = Float(clamped * 100)
     }
 
     public func setRate(_ newRate: Double) {

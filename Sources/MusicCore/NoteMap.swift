@@ -181,6 +181,18 @@ public enum TuningPreset: String, CaseIterable, Codable, Sendable, Identifiable 
         }
     }
 
+    /// Raising the song by `semitones` lets you play it with the guitar in `target`, e.g. a song in
+    /// "half a step down" played with a guitar in standard tuning. Nil when no such shift applies.
+    public var playableShift: (semitones: Int, target: TuningPreset)? {
+        switch self {
+        case .halfDown: (1, .standard)
+        case .wholeDown: (2, .standard)
+        case .dropCSharp: (1, .dropD)
+        case .dropC: (2, .dropD)
+        case .standard, .dropD: nil
+        }
+    }
+
     /// The open strings from the lowest, e.g. "E A D G B E".
     public var stringNames: String {
         // Half a step down is known as "E♭ standard", so it reads in flats.

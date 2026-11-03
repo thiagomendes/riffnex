@@ -127,11 +127,13 @@ struct ArenaView: View {
 
                         Button { model.pause(); showingTuning = true } label: {
                             HStack(spacing: 4) {
-                                Text("AFINAÇÃO: \(model.tuning.title.uppercased())")
+                                Text(model.playShifted ? "SUA GUITARRA: \(model.playingTuning.title.uppercased())"
+                                                       : "AFINAÇÃO: \(model.tuning.title.uppercased())")
                                 Image(systemName: "chevron.down")
                             }
                             .font(.rxHUD(9))
-                            .foregroundStyle(model.tuning == .standard ? RX.Palette.textSecondary : RX.Palette.fireLight)
+                            .foregroundStyle(model.tuning == .standard ? RX.Palette.textSecondary
+                                             : model.playShifted ? RX.Palette.cyan : RX.Palette.fireLight)
                             .padding(.horizontal, 8).frame(height: 28)
                             .background(RoundedRectangle(cornerRadius: 4).fill(RX.Palette.surface.opacity(0.9)))
                             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(RX.Palette.hairline))
@@ -159,6 +161,9 @@ struct ArenaView: View {
                     TuningSuggestionCard(suggestion: suggestion) {
                         model.choose(suggestion.preset)
                         show(suggestion.preset.title)
+                    } shifted: {
+                        model.choose(suggestion.preset, shifted: true)
+                        show("Tocando em \(model.playingTuning.title.lowercased())")
                     } keep: {
                         model.dismissSuggestion()
                     } details: {
@@ -184,8 +189,10 @@ struct ArenaView: View {
         .background(RX.Palette.base.ignoresSafeArea())
         .sheet(isPresented: $showingAbout) { EstimatedNotesSheet() }
         .sheet(isPresented: $showingTuning) {
-            TuningSheet(current: model.tuning, suggestion: model.suggestion ?? model.detectedSuggestion) { preset in
-                model.choose(preset)
+            TuningSheet(current: model.tuning, currentShifted: model.playShifted,
+                        suggestion: model.suggestion ?? model.detectedSuggestion) { preset, shifted in
+                model.choose(preset, shifted: shifted)
+                show(shifted ? "Tocando em \(model.playingTuning.title.lowercased())" : preset.title)
             }
         }
         .task(id: model.notes?.createdAt) { await model.refreshNeck() }
@@ -576,6 +583,7 @@ struct EstimatedNotesSheet: View {
 struct TuningSuggestionCard: View {
     let suggestion: TuningSuggestion
     let use: () -> Void
+    let shifted: () -> Void
     let keep: () -> Void
     let details: () -> Void
 
@@ -593,6 +601,13 @@ struct TuningSuggestionCard: View {
                     .buttonStyle(ArenaButtonStyle(prominent: true, active: false))
                 Button("Manter padrão", action: keep)
                     .buttonStyle(ArenaButtonStyle(prominent: false, active: false))
+            }
+            if let shift = suggestion.preset.playableShift {
+                Button(action: shifted) {
+                    Text("Tocar com a guitarra em \(shift.target.title.lowercased()), sem reafinar")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ArenaButtonStyle(prominent: false, active: true))
             }
             Button(action: details) {
                 Text("Ver afinações e afinar de ouvido").font(.footnote.weight(.semibold)).foregroundStyle(RX.Palette.cyan)
