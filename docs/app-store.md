@@ -40,7 +40,7 @@ Tudo é processado no iPhone. Suas músicas não saem do aparelho, e o app não 
 Importe apenas músicas que você tem o direito de usar.
 
 ## Palavras-chave (até 100 caracteres, separadas por vírgula, sem espaço)
-guitarra,riff,ouvido,aprender,separar,instrumento,tablatura,afinador,velocidade,loop,música,violão
+guitarra,riff,ouvido,aprender,separar,instrumento,notas,afinador,velocidade,loop,música,violão
 
 ## Categoria
 Principal: Música. Secundária: Educação.
