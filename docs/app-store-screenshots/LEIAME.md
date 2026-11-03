@@ -1,6 +1,6 @@
 # Capturas para a App Store
 
-Tamanho 1290 × 2796 (iPhone 6,9"), em JPEG sem transparência. O App Store Connect aceita esse tamanho e reduz sozinho para os iPhones menores.
+Use a pasta `1206x2622/`: é o tamanho que o App Store Connect pede hoje para "iPhone com Dynamic Island (tela média)". Os arquivos na raiz desta pasta estão em 1290 × 2796, o tamanho antigo de 6,9".
 
 Ordem sugerida na página do app:
 1. `1-anel.jpg`: Prenda o riff
