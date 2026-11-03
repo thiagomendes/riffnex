@@ -12,5 +12,5 @@
   "routes": [
     { "route": "/assets/*", "headers": { "Cache-Control": "public, max-age=604800" } }
   ],
-  "mimeTypes": { ".json": "application/json" }
+  "mimeTypes": { ".json": "application/json", ".xml": "application/xml", ".txt": "text/plain" }
 }
