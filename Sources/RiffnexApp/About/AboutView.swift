@@ -9,8 +9,8 @@ struct AboutView: View {
     @State private var sizes: [UUID: Int64] = [:]
     @State private var pendingRemoval: SongRecord?
 
-    private static let privacyURL = URL(string: "https://github.com/thiagomendes/riffnex/blob/claude/m2-analysis/docs/privacidade.md")!
-    private static let supportURL = URL(string: "https://github.com/thiagomendes/riffnex/blob/claude/m2-analysis/docs/suporte.md")!
+    private static let privacyURL = URL(string: "https://riffnex.tmdevlab.com/privacidade/")!
+    private static let supportURL = URL(string: "https://riffnex.tmdevlab.com/suporte/")!
 
     var body: some View {
         ZStack {
@@ -54,6 +54,7 @@ struct AboutView: View {
                 .foregroundStyle(RX.brandGradient)
             Text("Aprenda riffs de ouvido com as suas músicas. O RIFFNEX separa a guitarra do resto da banda, e você ouve só ela, desacelera e repete cada trecho até conseguir tocar.")
             Text("Tudo acontece no seu iPhone. As músicas não saem do aparelho, e o app não coleta nenhum dado.")
+            Text("Um app do TM Dev Lab.")
         }
         .font(.subheadline)
         .foregroundStyle(RX.Palette.textSecondary)

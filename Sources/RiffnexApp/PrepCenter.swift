@@ -261,7 +261,7 @@ final class PrepCenter {
     /// the preparation is cancelled cleanly (nothing partial is saved) and can be restarted.
     private func beginBackgroundTime() {
         // Keep the screen on: separation takes minutes and auto-lock would stop it.
-        UIApplication.shared.isIdleTimerDisabled = true
+        ScreenAwake.hold("separation")
         guard backgroundTask == .invalid else { return }
         // iOS calls the expiration handler on the main thread and terminates the app unless the task is
         // ended before the handler returns, so everything here runs synchronously.
@@ -278,7 +278,7 @@ final class PrepCenter {
     }
 
     private func endBackgroundTime() {
-        UIApplication.shared.isIdleTimerDisabled = false
+        ScreenAwake.release("separation")
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid

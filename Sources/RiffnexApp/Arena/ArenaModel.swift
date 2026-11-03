@@ -47,6 +47,8 @@ final class ArenaModel {
     // MARK: Lifecycle
 
     func start() async {
+        // Hands are on the guitar while practising: the screen stays on.
+        ScreenAwake.hold("practice")
         let stems = app.stemSources(for: song, map: map)
         do {
             try player.load(url: app.audioURL(for: song), title: song.title, artist: song.artist, stems: stems)
@@ -78,6 +80,7 @@ final class ArenaModel {
     }
 
     func stop() async {
+        ScreenAwake.release("practice")
         ticker?.cancel()
         ticker = nil
         player.pause()
