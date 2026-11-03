@@ -19,3 +19,17 @@ O workflow `.github/workflows/site.yml` publica esta pasta sempre que algo em `s
 5. Domínio: no recurso do Azure › **Domínios personalizados** › Adicionar › `riffnex.tmdevlab.com`. No DNS do tmdevlab.com, crie um registro **CNAME** `riffnex` apontando para o endereço padrão do app (algo como `nome-aleatorio.azurestaticapps.net`). O Azure valida e emite o certificado HTTPS sozinho.
 
 `staticwebapp.config.json` define a página 404, barra no fim dos endereços e cabeçalhos de segurança.
+
+## SEO
+
+Já está no site:
+- Título e descrição únicos por página, endereço canônico, `robots.txt` e `sitemap.xml`.
+- Imagem de compartilhamento (`assets/og-image.png`, 1200×630) para WhatsApp, redes e buscadores.
+- Dados estruturados (schema.org): `SoftwareApplication` e `WebSite` na página inicial, `FAQPage` na ajuda. Eles permitem que o Google mostre o app e as perguntas em destaque.
+- A página 404 não é indexada.
+
+O que vale fazer depois de publicar:
+1. **Google Search Console**: adicione a propriedade `riffnex.tmdevlab.com` (verificação por registro TXT no DNS), envie `https://riffnex.tmdevlab.com/sitemap.xml` e peça a indexação da página inicial.
+2. **Bing Webmaster Tools**: dá para importar direto do Search Console.
+3. Quando o app estiver na App Store, coloque na página inicial a meta `<meta name="apple-itunes-app" content="app-id=SEU_ID">`, que mostra o banner nativo da loja no Safari do iPhone, e troque o botão "Em breve" pelo link da loja.
+4. Links de fora ajudam muito: o próprio www.tmdevlab.com apontando para o RIFFNEX já é um bom começo.
