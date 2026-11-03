@@ -33,6 +33,8 @@ jobs:
       HAS_SECRETS: ${{ secrets.ASC_KEY_ID != '' && secrets.ASC_ISSUER_ID != '' && secrets.ASC_KEY_P8 != '' && secrets.APPLE_TEAM_ID != '' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
 
       - name: Install xtool
         run: |
