@@ -5,10 +5,18 @@ import SwiftUI
 @main
 struct RiffnexApp: App {
     @State private var app = AppModel()
+    @State private var showSplash = true
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            ZStack {
+                RootView()
+                if showSplash {
+                    SplashView { showSplash = false }
+                        .transition(.identity)
+                        .zIndex(1)
+                }
+            }
                 .environment(app)
                 .preferredColorScheme(.dark)
                 .tint(RX.Palette.magenta)

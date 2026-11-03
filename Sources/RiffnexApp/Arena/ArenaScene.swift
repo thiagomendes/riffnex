@@ -5,6 +5,8 @@ import SwiftUI
 /// Where things are on the practice screen, shared by drawing and gestures.
 struct ArenaGeometry {
     let size: CGSize
+    /// The guitar neck is drawn on the floor: the ring gets a little smaller and higher to clear it.
+    var neck = false
     /// Tape pixels per second of music.
     static let pointsPerSecond: CGFloat = 74
 
@@ -12,9 +14,9 @@ struct ArenaGeometry {
     /// Tape baseline.
     var cy: CGFloat { size.height * 0.47 }
     var maxHeight: CGFloat { min(size.height * 0.14, 112) }
-    var ringRadius: CGFloat { min(size.width * 0.23, size.height * 0.18) }
+    var ringRadius: CGFloat { neck ? min(size.width * 0.205, size.height * 0.15) : min(size.width * 0.23, size.height * 0.18) }
     var ringDepth: CGFloat { ringRadius * 0.36 }
-    var ringCenter: CGPoint { CGPoint(x: cx, y: size.height * 0.46) }
+    var ringCenter: CGPoint { CGPoint(x: cx, y: size.height * (neck ? 0.425 : 0.46)) }
     /// Speed meter radius.
     var meterRadius: CGFloat { ringRadius + ringDepth + 22 }
 
@@ -44,7 +46,7 @@ enum ArenaScene {
     }
 
     static func draw(_ context: inout GraphicsContext, size: CGSize, input: Input, fx: ArenaFX, dt: Double) {
-        let g = ArenaGeometry(size: size)
+        let g = ArenaGeometry(size: size, neck: input.showNeck && input.notes != nil)
         step(fx, dt: dt)
         let e = ease(fx.ring)
         let pulse = input.playing ? exp(-(input.map.beatPhase(at: input.now) ?? 1) * 7) : 0
@@ -331,7 +333,7 @@ enum ArenaScene {
                 hud.fill(Path(ellipseIn: CGRect(x: c.x - 12 + CGFloat(j) * 16, y: c.y + g.meterRadius + 24, width: 8, height: 8)),
                          with: .color(on ? RX.Palette.magenta : .white.opacity(0.15)))
             }
-        } else {
+        } else if !(input.showNeck && input.notes != nil) {
             hud.draw(Text("gire o anel para mudar a velocidade").font(.caption).foregroundStyle(RX.Palette.textTertiary),
                      at: CGPoint(x: c.x, y: c.y + g.meterRadius + 28))
         }

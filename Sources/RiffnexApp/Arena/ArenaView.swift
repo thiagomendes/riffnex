@@ -98,6 +98,7 @@ struct ArenaView: View {
                             .id(coachStep)
                     }
                     if !model.riffs.isEmpty { riffChips }
+                    if model.notes != nil || model.noteProgress != nil { neckBar }
                     Spacer()
                     controls
                 }
@@ -111,63 +112,6 @@ struct ArenaView: View {
                 }
                 .frame(width: 34, height: size.height * 0.34)
                 .position(x: size.width - 21, y: size.height * 0.45)
-
-                if model.notes != nil || model.noteProgress != nil {
-                    Button {
-                        showNeck.toggle()
-                        show(showNeck ? "Notas estimadas" : "Braço escondido")
-                    } label: {
-                        Image(systemName: showNeck ? "guitars.fill" : "guitars")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(showNeck ? RX.Palette.fireLight : RX.Palette.textTertiary)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(RX.Palette.surface.opacity(0.85)))
-                    }
-                    .accessibilityLabel(showNeck ? "Esconder o braço com as notas estimadas" : "Mostrar o braço com as notas estimadas")
-                    .position(x: 34, y: size.height * 0.66)
-
-                    if showNeck {
-                        Button { showingAbout = true } label: {
-                            Image(systemName: "info")
-                                .font(.footnote.weight(.bold))
-                                .foregroundStyle(RX.Palette.textSecondary)
-                                .frame(width: 44, height: 44)
-                                .background(Circle().fill(RX.Palette.surface.opacity(0.85)).padding(6))
-                        }
-                        .accessibilityLabel("Como as notas são estimadas")
-                        .position(x: 34, y: size.height * 0.66 + 48)
-
-                        Button { model.pause(); showingTuning = true } label: {
-                            HStack(spacing: 4) {
-                                Text(model.playShifted ? "SUA GUITARRA: \(model.playingTuning.title.uppercased())"
-                                                       : "AFINAÇÃO: \(model.tuning.title.uppercased())")
-                                Image(systemName: "chevron.down")
-                            }
-                            .font(.rxHUD(9))
-                            .foregroundStyle(model.tuning == .standard ? RX.Palette.textSecondary
-                                             : model.playShifted ? RX.Palette.cyan : RX.Palette.fireLight)
-                            .padding(.horizontal, 8).frame(height: 28)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(RX.Palette.surface.opacity(0.9)))
-                            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(RX.Palette.hairline))
-                            .fixedSize()
-                        }
-                        .frame(minHeight: 44)
-                        .accessibilityLabel("Afinação: \(model.tuning.title). Toque para trocar ou afinar a guitarra.")
-                        .position(x: size.width - 86, y: size.height * 0.66)
-
-                        if let key = model.key {
-                            Text("TOM: \(key.name)")
-                                .font(.rxHUD(9))
-                                .foregroundStyle(RX.Palette.textSecondary)
-                                .padding(.horizontal, 8).frame(height: 24)
-                                .background(RoundedRectangle(cornerRadius: 4).fill(RX.Palette.surface.opacity(0.9)))
-                                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(RX.Palette.hairline))
-                                .fixedSize()
-                                .accessibilityLabel("Tom da música: \(key.name)\(key.source == .notes ? ", estimado pelas notas da guitarra" : "")")
-                                .position(x: size.width - 86, y: size.height * 0.66 + 34)
-                        }
-                    }
-                }
 
                 if showNeck, let suggestion = model.suggestion {
                     TuningSuggestionCard(suggestion: suggestion) {
@@ -290,6 +234,66 @@ struct ArenaView: View {
         .padding(.top, RX.Space.s)
     }
 
+    /// The neck's controls, in one row under the top instead of over the strings.
+    private var neckBar: some View {
+        HStack(spacing: RX.Space.xs) {
+            Button {
+                showNeck.toggle()
+                show(showNeck ? "Notas estimadas" : "Braço escondido")
+            } label: {
+                Image(systemName: showNeck ? "guitars.fill" : "guitars")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(showNeck ? RX.Palette.fireLight : RX.Palette.textTertiary)
+                    .frame(width: 34, height: 30)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(RX.Palette.surface.opacity(0.9)))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(RX.Palette.hairline))
+            }
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityLabel(showNeck ? "Esconder o braço com as notas estimadas" : "Mostrar o braço com as notas estimadas")
+            if showNeck {
+                Button { showingAbout = true } label: {
+                    Image(systemName: "info")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(RX.Palette.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(RX.Palette.surface.opacity(0.9)))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(RX.Palette.hairline))
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("Como as notas são estimadas")
+                Spacer(minLength: 0)
+                if let key = model.key {
+                    Text("TOM: \(key.name)")
+                        .font(.rxHUD(9))
+                        .foregroundStyle(RX.Palette.textSecondary)
+                        .padding(.horizontal, 8).frame(height: 30)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(RX.Palette.surface.opacity(0.9)))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(RX.Palette.hairline))
+                        .fixedSize()
+                        .accessibilityLabel("Tom da música: \(key.name)\(key.source == .notes ? ", estimado pelas notas da guitarra" : "")")
+                }
+                Button { model.pause(); showingTuning = true } label: {
+                    HStack(spacing: 4) {
+                        Text(model.playShifted ? "SUA GUITARRA: \(model.playingTuning.title.uppercased())"
+                                               : "AFINAÇÃO: \(model.tuning.title.uppercased())")
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.rxHUD(9))
+                    .foregroundStyle(model.tuning == .standard ? RX.Palette.textSecondary
+                                     : model.playShifted ? RX.Palette.cyan : RX.Palette.fireLight)
+                    .lineLimit(1)
+                    .padding(.horizontal, 8).frame(height: 30)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(RX.Palette.surface.opacity(0.9)))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(RX.Palette.hairline))
+                }
+                .frame(minHeight: 44)
+                .accessibilityLabel("Afinação: \(model.tuning.title). Toque para trocar ou afinar a guitarra.")
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
     /// Saved riffs: one tap catches the riff in the ring again.
     private var riffChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -383,7 +387,7 @@ struct ArenaView: View {
     }
 
     private func begin(at point: CGPoint, size: CGSize) {
-        let g = ArenaGeometry(size: size)
+        let g = ArenaGeometry(size: size, neck: showNeck && model.neck != nil)
         var t = Touch(start: point)
         if model.loop != nil {
             let c = g.ringCenter
@@ -417,7 +421,7 @@ struct ArenaView: View {
 
     private func moved(_ value: DragGesture.Value, size: CGSize) {
         guard var t = touch else { return }
-        let g = ArenaGeometry(size: size)
+        let g = ArenaGeometry(size: size, neck: showNeck && model.neck != nil)
         let dx = value.location.x - t.start.x, dy = value.location.y - t.start.y
         if t.mode == nil || t.mode == .focusOnly {
             guard hypot(dx, dy) >= 8 else { return }
