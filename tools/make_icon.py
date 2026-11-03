@@ -1,68 +1,62 @@
 """Generates App/AppIcon.png (1024x1024, RGB, no alpha) for RIFFNEX.
 
-Concept: a sound wave on the left resolves into six guitar strings on the right
-("from listening to playing"), with one cyan note lit on a string.
-Run: python3 tools/make_icon.py
+Concept: the practice screen's ring. A riff caught in a loop, the guitar's loudness in
+orange and the band's in cyan around it, the speed meter outside and the playhead at the top.
+Run: python3 tools/make_icon.py   (needs Pillow)
 """
-import numpy as np
-from PIL import Image
-
-S = 1024
-SS = 3  # supersampling
-N = S * SS
-y, x = np.mgrid[0:N, 0:N].astype(np.float32) / N  # 0..1
-
-# Background: near-black with a soft violet glow, slightly cooler at the bottom.
-bg = np.zeros((N, N, 3), np.float32)
-bg[...] = np.array([7, 7, 10], np.float32) / 255
-glow = np.exp(-(((x - 0.38) ** 2) / 0.10 + ((y - 0.42) ** 2) / 0.07))
-bg += glow[..., None] * (np.array([124, 92, 255], np.float32) / 255) * 0.22
-img = bg
-
-def gradient(t):
-    """Brand gradient violet -> blue -> cyan for t in 0..1."""
-    stops = np.array([[124, 92, 255], [61, 123, 255], [63, 224, 232]], np.float32) / 255
-    t = np.clip(t, 0, 1) * 2
-    i = np.minimum(t.astype(int), 1)
-    f = (t - i)[..., None]
-    return stops[i] * (1 - f) + stops[i + 1] * f
-
-def stroke(dist, width):
-    """Anti-aliased coverage for distance field (in normalized units)."""
-    px = 1.0 / N
-    return np.clip((width - dist) / (1.5 * px) + 0.5, 0, 1)
-
-strings_y = 0.30 + np.arange(6) * 0.08          # six strings
-x0, x1 = 0.12, 0.88                               # drawable span
-blend = np.clip((x - 0.30) / 0.30, 0, 1)          # 0 = wave, 1 = straight string
-blend = blend * blend * (3 - 2 * blend)
-env = (1 - blend)
-for k, sy in enumerate(strings_y):
-    amp = 0.085 * np.exp(-((k - 2.5) ** 2) / 6.0)
-    phase = k * 0.9
-    curve = sy + env * amp * np.sin(2 * np.pi * (x * 3.2) + phase) * np.sin(np.pi * np.clip((x - x0) / 0.5, 0, 1))
-    width = 0.0042 + k * 0.0011                   # thicker low strings
-    cov = stroke(np.abs(y - curve), width) * ((x > x0) & (x < x1))
-    fade = np.clip((x - x0) / 0.05, 0, 1) * np.clip((x1 - x) / 0.05, 0, 1)
-    color = gradient((x - x0) / (x1 - x0))
-    alpha = (cov * fade * (0.55 + 0.45 * env))[..., None]
-    img = img * (1 - alpha) + color * alpha
-
-# A fret line where the wave has become strings.
-fx = 0.70
-cov = stroke(np.abs(x - fx), 0.0035) * ((y > strings_y[0] - 0.03) & (y < strings_y[-1] + 0.03))
-img = img * (1 - cov[..., None] * 0.35) + np.array([0.75, 0.77, 0.85]) * cov[..., None] * 0.35
-
-# The lit note: cyan dot with glow on string 3, just behind the fret.
-cx, cy = 0.64, strings_y[2]
-d = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-halo = np.exp(-(d ** 2) / 0.0035)[..., None] * 0.55
-cyan = np.array([63, 224, 232], np.float32) / 255
-img = img + halo * cyan * 0.6
-core = stroke(d, 0.034)[..., None]
-img = img * (1 - core) + (cyan * 0.85 + 0.15) * core
-
-img = np.clip(img, 0, 1)
-out = Image.fromarray((img * 255).astype(np.uint8), "RGB").resize((S, S), Image.LANCZOS)
-out.save("App/AppIcon.png", optimize=True)
-print("wrote App/AppIcon.png", out.size, out.mode)
+import math, random
+from PIL import Image, ImageDraw, ImageFilter
+S=1024; random.seed(7)
+def lerp(a,b,t): return tuple(int(a[i]+(b[i]-a[i])*t) for i in range(3))
+bg=Image.new('RGB',(S,S))
+px=bg.load()
+c1=(40,22,88); c2=(13,10,31); c3=(5,4,12)
+for y in range(S):
+    for x in range(S):
+        d=math.hypot(x-S*0.5,y-S*0.46)/(S*0.72)
+        px[x,y]=lerp(c1,c2,min(1,d/0.55)) if d<0.55 else lerp(c2,c3,min(1,(d-0.55)/0.45))
+glow=Image.new('RGBA',(S,S),(0,0,0,0)); g=ImageDraw.Draw(glow)
+sharp=Image.new('RGBA',(S,S),(0,0,0,0)); d=ImageDraw.Draw(sharp)
+cx,cy,R=S/2,S/2,S*0.255
+fire=(255,106,43); fire2=(255,194,61); cyan=(51,225,255); mag=(255,61,154)
+# envelopes: riff plucks
+N=132
+def env(i, kind):
+    t=i/N
+    v=0
+    for p in [0,0.125,0.19,0.31,0.375,0.5,0.625,0.69,0.81,0.875]:
+        if t>=p: v+=math.exp(-(t-p)/(0.035 if kind=='g' else 0.02))
+    return min(1,0.15+0.75*(1-math.exp(-v*1.4)))
+for i in range(N):
+    th=-math.pi/2+i/N*2*math.pi
+    cs,sn=math.cos(th),math.sin(th)
+    hb=env((i+3)%N,'b')*0.85; hg=env(i,'g')
+    for h,col,k,w in [(hb,cyan,1.0,9),(hg,fire,0.8,10)]:
+        ro=R+h*S*0.12*k; ri=R-h*S*0.065*k
+        seg=[(cx+cs*ri,cy+sn*ri),(cx+cs*ro,cy+sn*ro)]
+        g.line(seg,fill=col+(255,),width=w*3)
+        d.line(seg,fill=col+(255,),width=w)
+# speed meter arcs
+Ro=R+S*0.17
+segs=12
+for i in range(segs):
+    a0=-90+i*30+3; a1=-90+(i+1)*30-3
+    lit=i<9
+    col=(mag if i>=8 else fire if i>=5 else fire2) if lit else (60,52,100)
+    box=[cx-Ro,cy-Ro,cx+Ro,cy+Ro]
+    if lit: g.arc(box,a0,a1,fill=col+(255,),width=54)
+    d.arc(box,a0,a1,fill=col+(255,),width=22 if lit else 14)
+# playhead
+d.rounded_rectangle([cx-7,cy-R-S*0.15,cx+7,cy-R+S*0.06],radius=6,fill=(255,255,255,255))
+g.rounded_rectangle([cx-14,cy-R-S*0.15,cx+14,cy-R+S*0.06],radius=10,fill=(255,61,154,255))
+glow=glow.filter(ImageFilter.GaussianBlur(26))
+out=bg.convert('RGBA')
+# dim glow
+gl=glow.copy(); a=gl.split()[3].point(lambda v:int(v*0.55)); gl.putalpha(a)
+out=Image.alpha_composite(out,gl); out=Image.alpha_composite(out,sharp)
+# center spark
+cg=Image.new('RGBA',(S,S),(0,0,0,0)); cd=ImageDraw.Draw(cg)
+cd.ellipse([cx-60,cy-60,cx+60,cy+60],fill=(255,194,61,140)); cg=cg.filter(ImageFilter.GaussianBlur(40))
+out=Image.alpha_composite(out,cg)
+cd2=ImageDraw.Draw(out); cd2.ellipse([cx-26,cy-26,cx+26,cy+26],fill=(255,240,220,255))
+out.convert('RGB').save('App/AppIcon.png')
