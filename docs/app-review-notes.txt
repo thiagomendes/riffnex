@@ -21,4 +21,4 @@ None. The app makes no network requests and uses no server, account, analytics, 
 None. The app works the same in every region. It is currently offered in Brazil and Portugal, and its interface is in Portuguese.
 
 5. REGULATED INDUSTRY OR THIRD-PARTY MATERIAL
-The app does not operate in a regulated industry and does not include or distribute any third-party music. The only bundled song is an original demo made for RIFFNEX. Users can only open audio files they already have on their own device, and the separated tracks stay private on that device. Nothing is uploaded or shared.
+The app does not operate in a regulated industry and does not include or distribute any third-party music. The only bundled song is an original demo made for RIFFNEX. Users can only open audio files they already have on their own device, and the separated tracks stay private on that device. Nothing is uploaded or shared. The app does not provide, sell, stream or distribute any music: users import files they have the right to use, as stated in the app and in the terms of use (https://riffnex.tmdevlab.com/termos/).
