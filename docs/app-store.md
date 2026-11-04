@@ -57,6 +57,7 @@ Dados coletados: nenhum. Responda "Não, não coletamos dados deste app".
 Desenvolvedor exibido na loja: TM Dev Lab (vem do nome da conta Apple Developer).
 
 ## Notas para a revisão da Apple (em inglês)
+Versão completa pedida pela Apple (guideline 2.1): docs/app-review-notes.txt
 RIFFNEX processes audio files the user imports from Files. A bundled original demo song (marked DEMO) is in the library on first launch, so no account or setup is needed to review the app. Open the demo: the first time, the app separates the guitar on device, which takes about a minute. Then drag up or down to change the mix, and hold and drag on the waveform to loop a riff. No data leaves the device. The app uses no account, no network service and no tracking.
 
 ## Classificação etária

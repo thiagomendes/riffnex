@@ -1,0 +1,24 @@
+SCREEN RECORDING
+A screen recording captured on a physical iPhone 14 Plus running the latest iOS is attached to this submission. It starts at app launch and shows the full typical flow: opening the bundled demo song, on-device guitar separation, the practice screen, looping a riff, changing speed and the guitar/band mix, tuning help, and importing a song from Files. The app has no accounts, no login, no user-generated content shared with others and no paid content.
+
+1. PURPOSE AND AUDIENCE
+RIFFNEX helps guitar players learn riffs by ear from songs they already own. Learning a riff from a full mix is hard because the guitar is buried under drums, bass and vocals. RIFFNEX separates the guitar from the rest of the band on the device, lets the player hear only the guitar or blend it back with the band, slow it down without changing pitch, and repeat a short section in a loop until they can play it. It also shows estimated notes on a guitar neck, the song key and the likely tuning. Audience: beginner and intermediate guitar players who learn by ear.
+
+2. HOW TO ACCESS THE MAIN FEATURES
+No login or setup is needed. A bundled original demo song (marked DEMO, composed for this app) is in the library on first launch, so no sample file is required.
+a) Launch the app and tap the DEMO song in the library.
+b) The first time, the app separates the guitar on device. This takes about a minute and the screen stays on.
+c) On the practice screen, drag up or down to change the mix between guitar only and full band.
+d) Touch and hold on the waveform, then drag, to catch a riff. It becomes a repeating loop.
+e) Use the speed control to slow it down. The notes on the neck below follow the music.
+f) Tap the tuning button (labeled with the tuning name) to see the detected tuning and the ear tuner.
+g) To use your own music: tap "Importar música" (+) in the library and choose an audio file (MP3, M4A, WAV, AIFF) from Files, or share an audio file to RIFFNEX with Open in RIFFNEX.
+
+3. EXTERNAL SERVICES
+None. The app makes no network requests and uses no server, account, analytics, advertising, payment or AI service. All processing runs on the device with Apple frameworks (AVFoundation, Core ML, Accelerate, MusicUnderstanding) and two open-source models bundled inside the app: Demucs (MIT license) for source separation and Basic Pitch (Apache 2.0 license) for note estimation. Their licenses are shown in the About screen.
+
+4. REGIONAL DIFFERENCES
+None. The app works the same in every region. It is currently offered in Brazil and Portugal, and its interface is in Portuguese.
+
+5. REGULATED INDUSTRY OR THIRD-PARTY MATERIAL
+The app does not operate in a regulated industry and does not include or distribute any third-party music. The only bundled song is an original demo made for RIFFNEX. Users can only open audio files they already have on their own device, and the separated tracks stay private on that device. Nothing is uploaded or shared.
