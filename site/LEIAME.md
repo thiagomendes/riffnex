@@ -6,7 +6,7 @@ Site estático de riffnex.tmdevlab.com: página inicial, ajuda (`suporte/`) e po
 - `CNAME` serve para hospedagens que usam esse arquivo para o domínio próprio. As outras ignoram.
 - Fontes: Chakra Petch e Russo One, do Google Fonts.
 - O app aponta para `https://riffnex.tmdevlab.com/privacidade/` e `https://riffnex.tmdevlab.com/suporte/`. Se o endereço mudar, troque também em `Sources/RiffnexApp/About/AboutView.swift` e em `docs/app-store.md`.
-- Quando o app estiver na App Store, troque o botão "Em breve na App Store" em `index.html` pelo link da página do app.
+- O app está na App Store: https://apps.apple.com/app/riffnex/id6829888708 (ID 6829888708). O botão da página inicial, o rodapé e o banner do Safari (meta apple-itunes-app) já apontam para lá.
 
 ## Publicação no Azure Static Web Apps
 
@@ -31,5 +31,5 @@ Já está no site:
 O que vale fazer depois de publicar:
 1. **Google Search Console**: adicione a propriedade `riffnex.tmdevlab.com` (verificação por registro TXT no DNS), envie `https://riffnex.tmdevlab.com/sitemap.xml` e peça a indexação da página inicial.
 2. **Bing Webmaster Tools**: dá para importar direto do Search Console.
-3. Quando o app estiver na App Store, coloque na página inicial a meta `<meta name="apple-itunes-app" content="app-id=SEU_ID">`, que mostra o banner nativo da loja no Safari do iPhone, e troque o botão "Em breve" pelo link da loja.
+3. Feito: a meta apple-itunes-app (app-id=6829888708) está em todas as páginas e o botão da página inicial leva à App Store.
 4. Links de fora ajudam muito: o próprio www.tmdevlab.com apontando para o RIFFNEX já é um bom começo.

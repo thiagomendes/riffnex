@@ -1,5 +1,7 @@
 # RIFFNEX na App Store (textos para colar no App Store Connect)
 
+Na App Store: https://apps.apple.com/app/riffnex/id6829888708 (ID da Apple 6829888708).
+
 Idioma principal: Português (Brasil).
 
 ## Nome (até 30 caracteres)
